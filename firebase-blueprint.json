@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with profile info.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "internalEmail": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["ADMIN_ERP", "ADMIN_ENTREPRISE", "GESTIONNAIRE_ADMIN", "GESTIONNAIRE_MODULE", "STAGIAIRE"] 
+        },
+        "companyId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "Enterprise": {
+      "title": "Enterprise Entity",
+      "description": "Permanent legal information about a company.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "acronym": { "type": "string" },
+        "description": { "type": "string" },
+        "industry": { "type": "string" },
+        "ncc": { "type": "string" },
+        "cnps": { "type": "string" },
+        "address": { "type": "string" },
+        "logo": { "type": "string" },
+        "contact": { "type": "string" },
+        "email": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "subscription": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["demo", "free", "standard", "pro"] },
+            "startDate": { "type": "string", "format": "date-time" },
+            "trialEndsAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Dossier": {
+      "title": "Dossier de Gestion",
+      "description": "A management file for a specific fiscal exercise.",
+      "type": "object",
+      "properties": {
+        "enterpriseId": { "type": "string" },
+        "filename": { "type": "string" },
+        "exercise": { "type": "string" },
+        "period": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "format": "date" },
+            "end": { "type": "string", "format": "date" }
+          }
+        },
+        "accountingConfig": {
+          "type": "object",
+          "properties": {
+            "accountLength": { "type": "number" },
+            "thirdPartyLength": { "type": "number" },
+            "analyticalLength": { "type": "number" },
+            "economicZone": { "type": "string" },
+            "accountingLaw": { "type": "string" },
+            "country": { "type": "string" },
+            "chartOfAccountsType": { "type": "string" }
+          }
+        },
+        "initialBalanceType": { "type": "string", "enum": ["manual", "import", "scratch"] },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["enterpriseId", "filename", "exercise", "ownerId"]
+    },
+    "Account": {
+      "title": "GL Account",
+      "description": "A General Ledger account.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["asset", "liability", "equity", "revenue", "expense"] },
+        "balance": { "type": "number" }
+      },
+      "required": ["code", "name", "type"]
+    },
+    "Transaction": {
+      "title": "Accounting Transaction",
+      "description": "A journal entry in the ledger.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "reference": { "type": "string" },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "accountId": { "type": "string" },
+              "debit": { "type": "number" },
+              "credit": { "type": "number" }
+            }
+          }
+        },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "description", "lines"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/enterprises/{enterpriseId}": {
+      "schema": "Enterprise",
+      "description": "Permanent enterprise information."
+    },
+    "/dossiers/{dossierId}": {
+      "schema": "Dossier",
+      "description": "Dossiers de gestion (management files)."
+    },
+    "/dossiers/{dossierId}/accounts/{accountId}": {
+      "schema": "Account",
+      "description": "Chart of accounts for a specific dossier."
+    },
+    "/dossiers/{dossierId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Journal entries (ledger) for a dossier."
+    }
+  }
+}

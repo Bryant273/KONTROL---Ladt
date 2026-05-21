@@ -1,0 +1,6 @@
+{
+  "name": "UNIKORP",
+  "description": "A comprehensive ERP suite featuring specialized modules: SKOMPTAB (Finance), SOCIX (HR), MARKOS (Marketing), and LOGSON (Logistics). Designed for modern business management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
