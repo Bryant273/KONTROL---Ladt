@@ -93,7 +93,25 @@ const PIE_DATA = [
 
 export default function Finance() {
   const { user } = useAuth();
-  const { activeEnterprise } = useCompany();
+  const { 
+    activeEnterprise, 
+    selectedDossier, 
+    systemChartId, 
+    duplicatedChartId, 
+    accounts, 
+    thirdParties, 
+    addAccount, 
+    deleteAccount, 
+    addTiers, 
+    deleteTiers,
+    journals,
+    entries,
+    addJournal,
+    deleteJournal,
+    addEntry,
+    deleteEntry,
+    updateEntry
+  } = useCompany();
   const location = useLocation();
   const [currentModule, setCurrentModule] = useState<Module>('tdb');
   const [activePage, setActivePage] = useState<string>('skom-tdb');
@@ -144,13 +162,134 @@ export default function Finance() {
   });
   const [modalMode, setModalMode] = useState<'create' | 'view' | 'edit'>('create');
   const [tiersTab, setTiersTab] = useState<'FRN' | 'CLI'>('FRN');
-  
-  const [thirdParties] = useState([
-    { id: '1', code: '4011-SOC', label: 'SOCIX SARL', phone: '+225 07 07 20 20', email: 'contact@socix.ci', type: 'FRN' },
-    { id: '2', code: '4011-MTN', label: "MTN COTE D'IVOIRE", phone: '+225 05 05 10 10', email: 'billing@mtn.ci', type: 'FRN' },
-    { id: '3', code: '4111-AXA', label: 'AXA ASSURANCES', phone: '+225 01 01 30 30', email: 'clients@axa.ci', type: 'CLI' },
-    { id: '4', code: '4111-BICI', label: 'BICICI PLATEAU', phone: '+225 27 20 20 20', email: 'service@bicici.ci', type: 'CLI' },
-  ]);
+
+  // Search filter query states
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [tiersSearchQuery, setTiersSearchQuery] = useState('');
+  const [brouillardSearchQuery, setBrouillardSearchQuery] = useState('');
+  const [saisieSearchQuery, setSaisieSearchQuery] = useState('');
+  const [saisieSelectedJournal, setSaisieSelectedJournal] = useState('Tous');
+
+  // Saisie Modal for General Account
+  const [newAccountNum, setNewAccountNum] = useState('');
+  const [newAccountLabel, setNewAccountLabel] = useState('');
+  const [newAccountClass, setNewAccountClass] = useState('1');
+
+  // Saisie Modal for Tiers Account
+  const [newTiersType, setNewTiersType] = useState<'FRN' | 'CLI' | 'PRT'>('FRN');
+  const [newTiersCode, setNewTiersCode] = useState('');
+  const [newTiersLabel, setNewTiersLabel] = useState('');
+  const [newTiersPhone, setNewTiersPhone] = useState('');
+  const [newTiersEmail, setNewTiersEmail] = useState('');
+  const [newTiersRattachement, setNewTiersRattachement] = useState('401100');
+
+  const handleCreateAccount = () => {
+    if (!newAccountNum || !newAccountLabel) return;
+    addAccount(newAccountNum, newAccountLabel, `Classe ${newAccountClass}`);
+    setNewAccountNum('');
+    setNewAccountLabel('');
+    setNewAccountClass('1');
+    setIsAccountModalOpen(false);
+  };
+
+  const handleCreateTiers = () => {
+    if (!newTiersCode || !newTiersLabel) return;
+    addTiers({
+      code: newTiersCode,
+      label: newTiersLabel,
+      phone: newTiersPhone,
+      email: newTiersEmail,
+      type: newTiersType,
+      rattachement: newTiersRattachement
+    });
+    setNewTiersCode('');
+    setNewTiersLabel('');
+    setNewTiersPhone('');
+    setNewTiersEmail('');
+    setNewTiersType('FRN');
+    setNewTiersRattachement('401100');
+    setIsTiersModalOpen(false);
+  };
+
+  const handleOpenEntry = (entry: any, mode: 'view' | 'edit') => {
+    setSelectedEntryId(entry.id);
+    setModalMode(mode);
+    setEntryForm({
+      dateSaisie: entry.dateSaisie,
+      journal: entry.journal,
+      dateOperation: entry.dateOperation,
+      piece: entry.piece,
+      libelle: entry.libelle
+    });
+    setEntryLines(entry.lines ? [...entry.lines] : [
+      { id: 1, account: '', tiers: '', label: '', debit: 0, credit: 0 },
+      { id: 2, account: '', tiers: '', label: '', debit: 0, credit: 0 },
+    ]);
+    setIsSaisieModalOpen(true);
+  };
+
+  const handleNewSaisieClick = () => {
+    setSelectedEntryId(null);
+    setModalMode('create');
+    setEntryForm({
+      dateSaisie: new Date().toLocaleDateString('fr-FR'),
+      journal: '',
+      dateOperation: new Date().toLocaleDateString('fr-FR'),
+      piece: '',
+      libelle: ''
+    });
+    setEntryLines([
+      { id: 1, account: '', tiers: '', label: '', debit: 0, credit: 0 },
+      { id: 2, account: '', tiers: '', label: '', debit: 0, credit: 0 },
+    ]);
+    setIsSaisieModalOpen(true);
+  };
+
+  const handleSaveEntry = () => {
+    if (!entryForm.journal || !entryForm.piece || !entryForm.libelle) {
+      alert("Veuillez remplir tous les champs obligatoires (*).");
+      return;
+    }
+    const debitTotal = entryLines.reduce((acc, l) => acc + (l.debit || 0), 0);
+    const creditTotal = entryLines.reduce((acc, l) => acc + (l.credit || 0), 0);
+    if (debitTotal !== creditTotal) {
+      alert("L'écriture n'est pas équilibrée (Débit doit être égal au Crédit).");
+      return;
+    }
+
+    if (modalMode === 'edit' && selectedEntryId) {
+      updateEntry(selectedEntryId, {
+        journal: entryForm.journal,
+        dateOperation: entryForm.dateOperation,
+        piece: entryForm.piece,
+        libelle: entryForm.libelle,
+        lines: entryLines as any
+      });
+    } else {
+      addEntry({
+        journal: entryForm.journal,
+        dateSaisie: entryForm.dateSaisie,
+        dateOperation: entryForm.dateOperation,
+        piece: entryForm.piece,
+        libelle: entryForm.libelle,
+        lines: entryLines as any
+      });
+    }
+
+    setIsSaisieModalOpen(false);
+  };
+
+  const handleCreateJournal = () => {
+    if (!newJournalCode || !newJournalLabel) return;
+    addJournal(newJournalCode, newJournalLabel, newJournalType, newJournalAccount);
+    setNewJournalCode('');
+    setNewJournalLabel('');
+    setNewJournalType('Achats');
+    setNewJournalAccount('');
+    setIsJournalModalOpen(false);
+  };
+
+
 
   const [invoices, setInvoices] = useState([
     { id: '1', date: '20/07/2024', piece: 'FACT-088', tiers: 'Client Alpha', type: 'Vente', amount: 4500, status: 'Traité' },
@@ -168,6 +307,9 @@ export default function Finance() {
   });
   
   const [newJournalType, setNewJournalType] = useState('Achats');
+  const [newJournalCode, setNewJournalCode] = useState('');
+  const [newJournalLabel, setNewJournalLabel] = useState('');
+  const [newJournalAccount, setNewJournalAccount] = useState('');
 
   // Accounting Entry Modal State
   const [entryLines, setEntryLines] = useState([
@@ -185,6 +327,7 @@ export default function Finance() {
 
   const [activeLineSearch, setActiveLineSearch] = useState<{ idx: number, type: 'account' | 'tiers' } | null>(null);
   const [searchValue, setSearchValue] = useState('');
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -449,22 +592,37 @@ export default function Finance() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  <JournalRow code="ACH" label="Journal des achats" type="Achats" account="—" status="Actif" />
-                  <JournalRow code="VTE" label="Journal des ventes" type="Ventes" account="—" status="Actif" />
-                  <JournalRow code="BQ" label="Journal de banque" type="Trésorerie" account="521100" status="Actif" />
-                  <JournalRow code="OD" label="Opérations diverses" type="Général" account="—" status="Actif" />
+                  {journals.map(j => (
+                    <JournalRow 
+                      key={j.id} 
+                      code={j.code} 
+                      label={j.label} 
+                      type={j.type} 
+                      account={j.account} 
+                      status={j.status}
+                      onDelete={!['ACH', 'VTE', 'BQ', 'OD'].includes(j.code) ? () => deleteJournal(j.id) : undefined}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         );
-      case 'comptes-generaux':
+      case 'comptes-generaux': {
+        const filteredAccounts = accounts.filter(acc => {
+          const queryStr = accountSearchQuery.toLowerCase().trim();
+          if (!queryStr) return true;
+          return acc.num.toLowerCase().includes(queryStr) || acc.label.toLowerCase().includes(queryStr);
+        });
+
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">Comptes généraux</h2>
-                <p className="text-xs text-slate-400 font-medium">Plan comptable général SYSCOHADA</p>
+                <p className="text-xs text-slate-400 font-medium font-mono">
+                  Plan actif : <strong className="text-slate-600">{selectedDossier?.accountingConfig?.accountingLaw || 'SYSCOHADA Révisé'}</strong>
+                </p>
               </div>
               <button 
                 onClick={() => setIsAccountModalOpen(true)}
@@ -473,29 +631,72 @@ export default function Finance() {
                 <Plus className="w-4 h-4" /> Nouveau compte
               </button>
             </div>
-            <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-6 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-12 text-center">#</th>
-                    <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">N° Compte</th>
-                    <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Intitulé</th>
-                    <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Classe</th>
-                    <th className="text-right py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  <AccountRow idx="1" num="101100" label="Capital social" classe="Classe 1" />
-                  <AccountRow idx="2" num="401100" label="Fournisseurs" classe="Classe 4" />
-                  <AccountRow idx="3" num="411100" label="Clients" classe="Classe 4" />
-                  <AccountRow idx="4" num="521100" label="Banque principale" classe="Classe 5" />
-                  <AccountRow idx="5" num="701100" label="Ventes marchandises" classe="Classe 7" />
-                </tbody>
-              </table>
+
+            {/* Search Bar & Template IDs */}
+            <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="relative flex-1 w-full">
+                <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={accountSearchQuery}
+                  onChange={e => setAccountSearchQuery(e.target.value)}
+                  placeholder="Rechercher par numéro de compte ou intitulé..." 
+                  className="w-full pl-10 pr-4 h-11 bg-slate-50 border border-slate-100 rounded-xl text-xs outline-none focus:border-[#4A9EC9] transition-all" 
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-[9px] font-mono text-slate-400 shrink-0">
+                <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
+                  ID Système : <strong className="text-slate-600 font-black">{systemChartId || 'N/A'}</strong>
+                </span>
+                <span className="flex items-center gap-1.5 bg-sky-50/50 px-2.5 py-1.5 rounded-lg border border-sky-100/50">
+                  ID Dupliqué : <strong className="text-sky-600 font-black">{duplicatedChartId || 'N/A'}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden p-6 max-h-[800px] overflow-y-auto">
+              {filteredAccounts.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs font-medium">
+                  Aucun compte trouvé pour votre recherche.
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider text-left">
+                      <th className="py-3 px-4 w-12 text-center">#</th>
+                      <th className="py-3 px-4">N° Compte</th>
+                      <th className="py-3 px-4">Intitulé</th>
+                      <th className="py-3 px-4">Classe</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filteredAccounts.map((acc, index) => (
+                      <AccountRow 
+                        key={acc.id} 
+                        idx={(index + 1).toString()} 
+                        num={acc.num} 
+                        label={acc.label} 
+                        classe={acc.classe} 
+                        onDelete={() => deleteAccount(acc.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         );
-      case 'comptes-tiers':
+      }
+      case 'comptes-tiers': {
+        const filteredThirdParties = thirdParties
+          .filter(tp => tp.type === tiersTab)
+          .filter(tp => {
+            const queryStr = tiersSearchQuery.toLowerCase().trim();
+            if (!queryStr) return true;
+            return tp.code.toLowerCase().includes(queryStr) || tp.label.toLowerCase().includes(queryStr);
+          });
+
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end">
@@ -509,6 +710,20 @@ export default function Finance() {
               >
                 <Plus className="w-4 h-4" /> Nouveau tiers
               </button>
+            </div>
+
+            {/* Search Bar for Tiers */}
+            <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4 w-full">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={tiersSearchQuery}
+                  onChange={e => setTiersSearchQuery(e.target.value)}
+                  placeholder="Rechercher par code tiers ou raison sociale..." 
+                  className="w-full pl-10 pr-4 h-11 bg-slate-50 border border-slate-100 rounded-xl text-xs outline-none focus:border-[#4A9EC9] transition-all" 
+                />
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden min-h-[400px]">
@@ -536,21 +751,24 @@ export default function Finance() {
               </div>
 
               <div className="p-6 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-12 text-center">#</th>
-                      <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Code Tiers</th>
-                      <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Intitulé</th>
-                      <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Téléphone</th>
-                      <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</th>
-                      <th className="text-right py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {thirdParties
-                      .filter(tp => tp.type === tiersTab)
-                      .map((tp, index) => (
+                {filteredThirdParties.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs font-medium">
+                    Aucun compte tiers enregistré.
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider text-left">
+                        <th className="py-3 px-4 w-12 text-center">#</th>
+                        <th className="py-3 px-4">Code Tiers</th>
+                        <th className="py-3 px-4">Intitulé</th>
+                        <th className="py-3 px-4">Téléphone</th>
+                        <th className="py-3 px-4">Email</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {filteredThirdParties.map((tp, index) => (
                         <TiersRow 
                           key={tp.id}
                           idx={(index + 1).toString()} 
@@ -558,15 +776,17 @@ export default function Finance() {
                           label={tp.label} 
                           phone={tp.phone} 
                           email={tp.email} 
+                          onDelete={() => deleteTiers(tp.id)}
                         />
-                      ))
-                    }
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>
         );
+      }
       case 'digit-factures':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -830,7 +1050,17 @@ export default function Finance() {
             </div>
           </div>
         );
-      case 'brouillards':
+      case 'brouillards': {
+        const queryStr = brouillardSearchQuery.toLowerCase().trim();
+        const filteredBrouillards = entries.filter(e => {
+          if (!queryStr) return true;
+          return (
+            e.piece.toLowerCase().includes(queryStr) ||
+            e.libelle.toLowerCase().includes(queryStr) ||
+            e.journal.toLowerCase().includes(queryStr)
+          );
+        });
+
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end">
@@ -841,11 +1071,14 @@ export default function Finance() {
               <div className="flex gap-2">
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="Rechercher..." className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-[#4A9EC9] w-64 transition-all" />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher dans le brouillard..." 
+                    value={brouillardSearchQuery}
+                    onChange={(e) => setBrouillardSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-[#4A9EC9] w-64 transition-all" 
+                  />
                 </div>
-                <button className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
-                  <ArrowUpDown className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -853,16 +1086,9 @@ export default function Finance() {
                <div className="p-1 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-2 px-3">
                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">12 Écritures en attente</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button className="p-1.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer">
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-[10px] font-bold text-slate-400">1 / 1</span>
-                  <button className="p-1.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer">
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                     {filteredBrouillards.length} Écriture(s) en attente
+                   </span>
                 </div>
               </div>
 
@@ -873,42 +1099,53 @@ export default function Finance() {
                     <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Date Op.</th>
                     <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">N° Pièce</th>
                     <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Libellé</th>
-                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Saisi par</th>
-                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Journal</th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Créé par</th>
                     <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  <BrouillardRow 
-                    idx="1" date="16/05/26" piece="FAC-001" label="Facture SOCIX - Achat" user="Kouassi J." status="Brouillon" 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                    onValidate={() => alert('Validation effectuée')}
-                  />
-                  <BrouillardRow 
-                    idx="2" date="15/05/26" piece="BQ-092" label="Virement Salaire" user="Bakayoko A." status="À vérifier" stripe 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                    onValidate={() => alert('Validation effectuée')}
-                  />
-                  <BrouillardRow 
-                    idx="3" date="14/05/26" piece="OD-003" label="Régularisation TVA" user="Kouassi J." status="Brouillon" 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                    onValidate={() => alert('Validation effectuée')}
-                  />
-                  <BrouillardRow 
-                    idx="4" date="14/05/26" piece="VTE-12" label="Vente Client BICI" user="Traoré M." status="À vérifier" stripe 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                    onValidate={() => alert('Validation effectuée')}
-                  />
+                  {filteredBrouillards.map((item, idx) => (
+                    <BrouillardRow 
+                      key={item.id}
+                      idx={idx + 1} 
+                      date={item.dateOperation} 
+                      piece={item.piece} 
+                      label={item.libelle} 
+                      user="Saisie ERP" 
+                      status={item.journal} 
+                      stripe={idx % 2 === 1}
+                      onView={() => handleOpenEntry(item, 'view')}
+                      onEdit={() => handleOpenEntry(item, 'edit')}
+                      onDelete={() => deleteEntry(item.id)}
+                      onValidate={() => alert(`Écriture ${item.piece} validée avec succès !`)}
+                    />
+                  ))}
+                  {filteredBrouillards.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-xs font-semibold text-slate-400">
+                        Aucune écriture trouvée dans le brouillard.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         );
-      case 'saisie-comptable':
+      }
+      case 'saisie-comptable': {
+        const queryStr = saisieSearchQuery.toLowerCase().trim();
+        const filteredSaisies = entries.filter(e => {
+          const matchesQuery = !queryStr ? true : (
+            e.piece.toLowerCase().includes(queryStr) ||
+            e.libelle.toLowerCase().includes(queryStr) ||
+            e.journal.toLowerCase().includes(queryStr)
+          );
+          const matchesJournal = saisieSelectedJournal === 'Tous' ? true : e.journal === saisieSelectedJournal;
+          return matchesQuery && matchesJournal;
+        });
+
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end">
@@ -919,6 +1156,12 @@ export default function Finance() {
               <button 
                 onClick={() => {
                   setModalMode('create');
+                  setEntryForm({
+                    journal: journals[0]?.code || 'ACH',
+                    dateOperation: new Date().toISOString().split('T')[0],
+                    piece: '',
+                    libelle: ''
+                  });
                   setEntryLines([
                     { id: 1, account: '', tiers: '', label: '', debit: 0, credit: 0 },
                     { id: 2, account: '', tiers: '', label: '', debit: 0, credit: 0 },
@@ -935,23 +1178,29 @@ export default function Finance() {
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-3">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="Rechercher une saisie..." className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] outline-none focus:border-[#4A9EC9] w-64 transition-all" />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher une saisie..." 
+                    value={saisieSearchQuery}
+                    onChange={(e) => setSaisieSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] outline-none focus:border-[#4A9EC9] w-64 transition-all" 
+                  />
                 </div>
-                <select className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-500 outline-none cursor-pointer">
-                  <option>Tous les journaux</option>
-                  <option>ACH - Achats</option>
-                  <option>VTE - Ventes</option>
-                  <option>BQ - Banque</option>
+                <select 
+                  value={saisieSelectedJournal}
+                  onChange={(e) => setSaisieSelectedJournal(e.target.value)}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-500 outline-none cursor-pointer"
+                >
+                  <option value="Tous">Tous les journaux</option>
+                  {journals.map(j => (
+                    <option key={j.id} value={j.code}>{j.code} - {j.label}</option>
+                  ))}
                 </select>
                 <div className="flex-1" />
-                <div className="flex items-center gap-1">
-                  <button className="p-1.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer">
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-[10px] font-bold text-slate-400">1 / 12</span>
-                  <button className="p-1.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer">
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400">
+                    Total: {filteredSaisies.length} ligne(s)
+                  </span>
                 </div>
               </div>
 
@@ -968,36 +1217,34 @@ export default function Finance() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  <SaisieRow 
-                    idx="1" id="ACH-202605-1" journal="ACH" date="16/05/26" piece="FAC-SOCIX-01" label="Achat fournitures bureau" 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                  />
-                  <SaisieRow 
-                    idx="2" id="VTE-202605-1" journal="VTE" date="15/05/26" piece="FAC-BICI-02" label="Vente licences" stripe 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                  />
-                  <SaisieRow 
-                    idx="3" id="BQ-202605-1" journal="BQ" date="15/05/26" piece="BQ-092" label="Versement espèces" 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                  />
-                  <SaisieRow 
-                    idx="4" id="ACH-202605-2" journal="ACH" date="14/05/26" piece="FAC-MTN-04" label="Achat forfait internet" stripe 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                  />
-                  <SaisieRow 
-                    idx="5" id="OD-202605-1" journal="OD" date="14/05/26" piece="OD-001" label="Dotation amortissements" 
-                    onView={() => { setModalMode('view'); setIsSaisieModalOpen(true); }}
-                    onEdit={() => { setModalMode('edit'); setIsSaisieModalOpen(true); }}
-                  />
+                  {filteredSaisies.map((item, idx) => (
+                    <SaisieRow 
+                      key={item.id}
+                      idx={idx + 1} 
+                      id={item.id} 
+                      journal={item.journal} 
+                      date={item.dateOperation} 
+                      piece={item.piece} 
+                      label={item.libelle} 
+                      stripe={idx % 2 === 1}
+                      onView={() => handleOpenEntry(item, 'view')}
+                      onEdit={() => handleOpenEntry(item, 'edit')}
+                      onDelete={() => deleteEntry(item.id)}
+                    />
+                  ))}
+                  {filteredSaisies.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-xs font-semibold text-slate-400">
+                        Aucune saisie comptable enregistrée.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         );
+      }
       default:
         return (
           <div className="h-64 flex items-center justify-center text-slate-400 text-sm font-medium animate-pulse">
@@ -1121,7 +1368,13 @@ export default function Finance() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Code</label>
-              <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] focus:ring-4 focus:ring-[#4A9EC9]/5 transition-all" placeholder="Ex: ACH" />
+              <input 
+                type="text" 
+                value={newJournalCode}
+                onChange={(e) => setNewJournalCode(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] focus:ring-4 focus:ring-[#4A9EC9]/5 transition-all" 
+                placeholder="Ex: ACH" 
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</label>
@@ -1139,7 +1392,13 @@ export default function Finance() {
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intitulé</label>
-            <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="Nom du journal" />
+            <input 
+              type="text" 
+              value={newJournalLabel}
+              onChange={(e) => setNewJournalLabel(e.target.value)}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              placeholder="Nom du journal" 
+            />
           </div>
 
           <AnimatePresence>
@@ -1151,10 +1410,21 @@ export default function Finance() {
                 className="space-y-1.5 overflow-hidden"
               >
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#4A9EC9]">Compte de trésorerie rattaché</label>
-                <select className="w-full h-11 bg-blue-50/50 border border-[#4A9EC9]/20 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer">
+                <select 
+                  value={newJournalAccount}
+                  onChange={(e) => setNewJournalAccount(e.target.value)}
+                  className="w-full h-11 bg-blue-50/50 border border-[#4A9EC9]/20 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+                >
                   <option value="">Sélectionner un compte (Classe 5)...</option>
-                  <option value="521100">521100 — Banque Principale</option>
-                  <option value="571100">571100 — Caisse Siège</option>
+                  {accounts.filter(a => a.num.startsWith('5')).map(a => (
+                    <option key={a.id} value={a.num}>{a.num} — {a.label}</option>
+                  ))}
+                  {accounts.filter(a => a.num.startsWith('5')).length === 0 && (
+                    <>
+                      <option value="521100">521100 — Banque Principale (Défaut)</option>
+                      <option value="571100">571100 — Caisse Siège</option>
+                    </>
+                  )}
                 </select>
                 <p className="text-[10px] text-slate-400 italic">Requis pour les journaux de banque ou caisse.</p>
               </motion.div>
@@ -1163,14 +1433,20 @@ export default function Finance() {
 
           <div className="pt-4 flex gap-3">
             <button 
-              onClick={() => setIsJournalModalOpen(false)}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              onClick={handleCreateJournal}
+              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
             >
               Enregistrer le journal
             </button>
             <button 
-              onClick={() => setIsJournalModalOpen(false)}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+              onClick={() => {
+                setNewJournalCode('');
+                setNewJournalLabel('');
+                setNewJournalType('Achats');
+                setNewJournalAccount('');
+                setIsJournalModalOpen(false);
+              }}
+              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
             >
               Annuler
             </button>
@@ -1187,11 +1463,21 @@ export default function Finance() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">N° Compte</label>
-              <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="Ex: 401100" />
+              <input 
+                type="text" 
+                value={newAccountNum}
+                onChange={e => setNewAccountNum(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                placeholder="Ex: 401100" 
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Classe</label>
-              <select className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer">
+              <select 
+                value={newAccountClass}
+                onChange={e => setNewAccountClass(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+              >
                 {[1,2,3,4,5,6,7,8,9].map(c => (
                   <option key={c} value={c}>Classe {c}</option>
                 ))}
@@ -1200,18 +1486,29 @@ export default function Finance() {
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intitulé du compte</label>
-            <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="Libellé du compte" />
+            <input 
+              type="text" 
+              value={newAccountLabel}
+              onChange={e => setNewAccountLabel(e.target.value)}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              placeholder="Libellé du compte" 
+            />
           </div>
           <div className="pt-4 flex gap-3">
             <button 
-              onClick={() => setIsAccountModalOpen(false)}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              onClick={handleCreateAccount}
+              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
             >
               Créer le compte
             </button>
             <button 
-              onClick={() => setIsAccountModalOpen(false)}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+              onClick={() => {
+                setNewAccountNum('');
+                setNewAccountLabel('');
+                setNewAccountClass('1');
+                setIsAccountModalOpen(false);
+              }}
+              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
             >
               Annuler
             </button>
@@ -2568,7 +2865,11 @@ export default function Finance() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type de tiers</label>
-              <select className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer">
+              <select 
+                value={newTiersType}
+                onChange={e => setNewTiersType(e.target.value as any)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+              >
                 <option value="FRN">Fournisseur</option>
                 <option value="CLI">Client</option>
                 <option value="PRT">Partenaire</option>
@@ -2576,41 +2877,84 @@ export default function Finance() {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Code Tiers</label>
-              <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="Ex: 4011-SOC" />
+              <input 
+                type="text" 
+                value={newTiersCode}
+                onChange={e => setNewTiersCode(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                placeholder="Ex: 4011-SOC" 
+              />
             </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intitulé / Raison sociale</label>
-            <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="Nom complet" />
+            <input 
+              type="text" 
+              value={newTiersLabel}
+              onChange={e => setNewTiersLabel(e.target.value)}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              placeholder="Nom complet" 
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Téléphone</label>
-              <input type="text" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="+225 ..." />
+              <input 
+                type="text" 
+                value={newTiersPhone}
+                onChange={e => setNewTiersPhone(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                placeholder="+225 ..." 
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Email</label>
-              <input type="email" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" placeholder="email@exemple.com" />
+              <input 
+                type="email" 
+                value={newTiersEmail}
+                onChange={e => setNewTiersEmail(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                placeholder="email@exemple.com" 
+              />
             </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compte général rattaché</label>
-            <select className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer">
-              <option value="401100">401100 — Fournisseurs d'exploitation</option>
-              <option value="411100">411100 — Clients & Comptes rattachés</option>
-              <option value="444100">444100 — État, impôts sur les bénéfices</option>
+            <select 
+              value={newTiersRattachement}
+              onChange={e => setNewTiersRattachement(e.target.value)}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+            >
+              {accounts.filter(a => a.num.startsWith('4')).map(a => (
+                <option key={a.id} value={a.num}>{a.num} — {a.label}</option>
+              ))}
+              {accounts.filter(a => a.num.startsWith('4')).length === 0 && (
+                <>
+                  <option value="401100">401100 — Fournisseurs d'exploitation</option>
+                  <option value="411100">411100 — Clients & Comptes rattachés</option>
+                  <option value="444100">444100 — État, impôts sur les bénéfices</option>
+                </>
+              )}
             </select>
           </div>
           <div className="pt-4 flex gap-3">
             <button 
-              onClick={() => setIsTiersModalOpen(false)}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              onClick={handleCreateTiers}
+              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
             >
               Enregistrer le tiers
             </button>
             <button 
-              onClick={() => setIsTiersModalOpen(false)}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+              onClick={() => {
+                setNewTiersCode('');
+                setNewTiersLabel('');
+                setNewTiersPhone('');
+                setNewTiersEmail('');
+                setNewTiersType('FRN');
+                setNewTiersRattachement('401100');
+                setIsTiersModalOpen(false);
+              }}
+              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
             >
               Annuler
             </button>
@@ -2639,14 +2983,15 @@ export default function Finance() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-[#111]">Journal *</label>
               <select 
+                value={entryForm.journal}
+                onChange={(e) => setEntryForm({ ...entryForm, journal: e.target.value })}
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] cursor-pointer"
                 disabled={modalMode === 'view'}
               >
                 <option value="">Sélectionnez un journal</option>
-                <option value="ACH">ACH — Journal des Achats</option>
-                <option value="VTE">VTE — Journal des Ventes</option>
-                <option value="BQ">BQ — Journal de Banque</option>
-                <option value="OD">OD — Opérations Diverses</option>
+                {journals.map(j => (
+                  <option key={j.id} value={j.code}>{j.code} — {j.label}</option>
+                ))}
               </select>
             </div>
             <div className="space-y-1.5">
@@ -2656,7 +3001,8 @@ export default function Finance() {
                 <input 
                   type="text" 
                   className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 text-sm outline-none focus:border-[#4A9EC9]" 
-                  defaultValue="17/05/2026"
+                  value={entryForm.dateOperation}
+                  onChange={(e) => setEntryForm({ ...entryForm, dateOperation: e.target.value })}
                   disabled={modalMode === 'view'}
                 />
               </div>
@@ -2670,6 +3016,8 @@ export default function Finance() {
                 type="text" 
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9]" 
                 placeholder="Ex: FAC-001"
+                value={entryForm.piece}
+                onChange={(e) => setEntryForm({ ...entryForm, piece: e.target.value })}
                 disabled={modalMode === 'view'}
               />
             </div>
@@ -2679,6 +3027,8 @@ export default function Finance() {
                 type="text" 
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9]" 
                 placeholder="Ex: Achat marchandises"
+                value={entryForm.libelle}
+                onChange={(e) => setEntryForm({ ...entryForm, libelle: e.target.value })}
                 disabled={modalMode === 'view'}
               />
             </div>
@@ -2722,22 +3072,32 @@ export default function Finance() {
                              }}
                              disabled={modalMode === 'view'}
                            />
-                           {activeLineSearch?.idx === idx && activeLineSearch.type === 'account' && searchValue.length > 0 && (
+                           {activeLineSearch?.idx === idx && activeLineSearch.type === 'account' && (
                              <div className="absolute left-2 right-2 top-11 z-[60] bg-white border border-slate-200 rounded-xl shadow-2xl p-2 max-h-48 overflow-y-auto">
-                                {[1,2,3].map(i => (
-                                  <button 
-                                    key={i}
-                                    onClick={() => {
-                                      const newLines = [...entryLines];
-                                      newLines[idx].account = '40110' + i;
-                                      setEntryLines(newLines);
-                                      setActiveLineSearch(null);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-xs hover:bg-[#F0F9FF] hover:text-[#4A9EC9] rounded-lg font-medium border-b border-slate-50 last:border-0"
-                                  >
-                                    40110{i} — Libellé compte {i}
-                                  </button>
-                                ))}
+                                {accounts
+                                  .filter(a => !searchValue || a.num.startsWith(searchValue) || a.label.toLowerCase().includes(searchValue.toLowerCase()))
+                                  .slice(0, 10)
+                                  .map(a => (
+                                    <button 
+                                      key={a.id}
+                                      type="button"
+                                      onClick={() => {
+                                        const newLines = [...entryLines];
+                                        newLines[idx].account = a.num;
+                                        if (!newLines[idx].label) {
+                                          newLines[idx].label = a.label;
+                                        }
+                                        setEntryLines(newLines);
+                                        setActiveLineSearch(null);
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-xs hover:bg-[#F0F9FF] hover:text-[#4A9EC9] rounded-lg font-medium border-b border-[#F8FAFC] last:border-0 cursor-pointer"
+                                    >
+                                      {a.num} — {a.label}
+                                    </button>
+                                  ))}
+                                {accounts.filter(a => !searchValue || a.num.startsWith(searchValue) || a.label.toLowerCase().includes(searchValue.toLowerCase())).length === 0 && (
+                                  <p className="text-[10px] text-slate-400 p-2 text-center">Aucun compte trouvé</p>
+                                )}
                              </div>
                            )}
                         </td>
@@ -2758,19 +3118,22 @@ export default function Finance() {
                            />
                            {activeLineSearch?.idx === idx && activeLineSearch.type === 'tiers' && searchValue.length > 0 && (
                              <div className="absolute left-2 right-2 top-11 z-[60] bg-white border border-slate-200 rounded-xl shadow-2xl p-2 max-h-48 overflow-y-auto">
-                                {['FRN-SOCIX', 'FRN-MTN', 'CLI-AXA'].map(t => (
+                                {thirdParties.filter(pt => !searchValue || pt.code.toLowerCase().includes(searchValue.toLowerCase()) || pt.label.toLowerCase().includes(searchValue.toLowerCase())).slice(0, 8).map(t => (
                                   <button 
-                                    key={t}
+                                    key={t.id}
                                     onClick={() => {
                                       const newLines = [...entryLines];
-                                      newLines[idx].tiers = t;
-                                      newLines[idx].account = t.startsWith('FRN') ? '401100' : '411100';
+                                      newLines[idx].tiers = t.code;
+                                      newLines[idx].account = t.rattachement;
+                                      if (!newLines[idx].label) {
+                                        newLines[idx].label = t.label;
+                                      }
                                       setEntryLines(newLines);
                                       setActiveLineSearch(null);
                                     }}
                                     className="w-full text-left px-3 py-2 text-xs hover:bg-[#F0F9FF] hover:text-[#4A9EC9] rounded-lg font-medium border-b border-slate-50 last:border-0"
                                   >
-                                    {t} — Nom du partenaire
+                                    {t.code} — {t.label} (Ratt.: {t.rattachement})
                                   </button>
                                 ))}
                              </div>
@@ -2882,8 +3245,8 @@ export default function Finance() {
               {modalMode !== 'view' && (
                 <button 
                   disabled={entryLines.reduce((acc, l) => acc + (l.debit || 0), 0) - entryLines.reduce((acc, l) => acc + (l.credit || 0), 0) !== 0}
-                  onClick={() => setIsSaisieModalOpen(false)}
-                  className="px-10 h-11 bg-[#A855F7] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-200 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:grayscale disabled:scale-100"
+                  onClick={handleSaveEntry}
+                  className="px-10 h-11 bg-[#A855F7] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-200 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:grayscale disabled:scale-100 cursor-pointer"
                 >
                   {modalMode === 'edit' ? 'Mettre à jour' : 'Enregistrer'}
                 </button>
@@ -3061,7 +3424,7 @@ function EntryRow({ date, journal, type, label, debit, credit }: any) {
   );
 }
 
-function JournalRow({ code, label, type, account, status }: any) {
+function JournalRow({ code, label, type, account, status, onDelete }: any) {
   return (
     <tr className="hover:bg-slate-50/80 cursor-pointer transition-colors group">
       <td className="py-4 px-4 font-mono font-bold text-slate-900 group-hover:text-brand">{code}</td>
@@ -3077,19 +3440,22 @@ function JournalRow({ code, label, type, account, status }: any) {
       </td>
       <td className="py-4 px-4 text-right">
         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              title="Supprimer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
   );
 }
 
-function AccountRow({ idx, num, label, classe }: any) {
+function AccountRow({ idx, num, label, classe, onDelete }: any) {
   return (
     <tr className={cn(
       "hover:bg-[#F0F9FF]/30 cursor-pointer transition-colors group",
@@ -3107,19 +3473,22 @@ function AccountRow({ idx, num, label, classe }: any) {
       </td>
       <td className="py-4 px-4 text-right">
         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              title="Supprimer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
   );
 }
 
-function SaisieRow({ idx, id, journal, date, piece, label, stripe, onView, onEdit }: any) {
+function SaisieRow({ idx, id, journal, date, piece, label, stripe, onView, onEdit, onDelete }: any) {
   return (
     <tr className={cn(
       "hover:bg-[#F0F9FF]/30 cursor-pointer transition-colors group",
@@ -3147,18 +3516,21 @@ function SaisieRow({ idx, id, journal, date, piece, label, stripe, onView, onEdi
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button 
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
   );
 }
 
-function BrouillardRow({ idx, date, piece, label, user, status, stripe, onView, onEdit, onValidate }: any) {
+function BrouillardRow({ idx, date, piece, label, user, status, stripe, onView, onEdit, onValidate, onDelete }: any) {
   return (
     <tr className={cn(
       "hover:bg-[#F0F9FF]/30 cursor-pointer transition-colors group",
@@ -3202,16 +3574,21 @@ function BrouillardRow({ idx, date, piece, label, user, status, stripe, onView, 
           >
             <Check className="w-3.5 h-3.5" />
           </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
   );
 }
 
-function TiersRow({ idx, code, label, phone, email }: any) {
+function TiersRow({ idx, code, label, phone, email, onDelete }: any) {
   return (
     <tr className="hover:bg-slate-50/80 cursor-pointer transition-colors group">
       <td className="py-4 px-4 text-center text-slate-300 font-mono text-[10px]">{idx}</td>
@@ -3231,12 +3608,15 @@ function TiersRow({ idx, code, label, phone, email }: any) {
       </td>
       <td className="py-4 px-4 text-right">
         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              title="Supprimer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
