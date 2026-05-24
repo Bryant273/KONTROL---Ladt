@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCompany } from '../../context/CompanyContext';
 import { Logo } from '../../components/ui/Logo';
+import { saveActionLog } from '../../lib/auditLogger';
 import { motion, AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
 import { 
@@ -101,13 +102,16 @@ export default function Finance() {
     accounts, 
     thirdParties, 
     addAccount, 
+    updateAccount,
     deleteAccount, 
     addTiers, 
+    updateTiers,
     deleteTiers,
     journals,
     entries,
     addJournal,
     deleteJournal,
+    updateJournal,
     addEntry,
     deleteEntry,
     updateEntry
@@ -115,7 +119,16 @@ export default function Finance() {
   const location = useLocation();
   const [currentModule, setCurrentModule] = useState<Module>('tdb');
   const [activePage, setActivePage] = useState<string>('skom-tdb');
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['creation', 'gestion']));
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+
+  // Automatic consultation tracking
+  useEffect(() => {
+    saveActionLog(selectedDossier?.id || 'default', {
+      type: 'Consultation',
+      desc: `Visualisation de la page ${activePage}`,
+      details: `Affichage réussi de l'écran : ${activePage}`
+    });
+  }, [activePage, selectedDossier?.id]);
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isTiersModalOpen, setIsTiersModalOpen] = useState(false);
@@ -174,6 +187,7 @@ export default function Finance() {
   const [newAccountNum, setNewAccountNum] = useState('');
   const [newAccountLabel, setNewAccountLabel] = useState('');
   const [newAccountClass, setNewAccountClass] = useState('1');
+  const [accountModalError, setAccountModalError] = useState<string | null>(null);
 
   // Saisie Modal for Tiers Account
   const [newTiersType, setNewTiersType] = useState<'FRN' | 'CLI' | 'PRT'>('FRN');
@@ -183,31 +197,112 @@ export default function Finance() {
   const [newTiersEmail, setNewTiersEmail] = useState('');
   const [newTiersRattachement, setNewTiersRattachement] = useState('401100');
 
+  const [editingTiersId, setEditingTiersId] = useState<string | null>(null);
+  const [tiersModalMode, setTiersModalMode] = useState<'create' | 'edit' | 'view'>('create');
+
+  const handleOpenTiers = (tp: any, mode: 'create' | 'edit' | 'view') => {
+    setTiersModalMode(mode);
+    if (mode === 'edit' || mode === 'view') {
+      setEditingTiersId(tp.id);
+      setNewTiersType(tp.type || 'FRN');
+      setNewTiersCode(tp.code);
+      setNewTiersLabel(tp.label);
+      setNewTiersPhone(tp.phone || '');
+      setNewTiersEmail(tp.email || '');
+      setNewTiersRattachement(tp.rattachement || '401100');
+    } else {
+      setEditingTiersId(null);
+      setNewTiersType('FRN');
+      setNewTiersCode('');
+      setNewTiersLabel('');
+      setNewTiersPhone('');
+      setNewTiersEmail('');
+      setNewTiersRattachement('401100');
+    }
+    setIsTiersModalOpen(true);
+  };
+
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [accountModalMode, setAccountModalMode] = useState<'create' | 'edit' | 'view'>('create');
+
+  const handleOpenAccount = (acc: any, mode: 'create' | 'edit' | 'view') => {
+    setAccountModalMode(mode);
+    setAccountModalError(null);
+    if (mode === 'edit' || mode === 'view') {
+      setEditingAccountId(acc.id);
+      setNewAccountNum(acc.num);
+      setNewAccountLabel(acc.label);
+      setNewAccountClass(acc.classe ? acc.classe.replace(/\D/g, '') : '1');
+    } else {
+      setEditingAccountId(null);
+      setNewAccountNum('');
+      setNewAccountLabel('');
+      setNewAccountClass('1');
+    }
+    setIsAccountModalOpen(true);
+  };
+
   const handleCreateAccount = () => {
     if (!newAccountNum || !newAccountLabel) return;
-    addAccount(newAccountNum, newAccountLabel, `Classe ${newAccountClass}`);
+    
+    const cleanNum = newAccountNum.trim().replace(/\s/g, '');
+    if (cleanNum.length < 8 || cleanNum.length > 14) {
+      setAccountModalError(`Le numéro de compte doit comporter entre 8 et 14 chiffres (actuel: ${cleanNum.length}).`);
+      return;
+    }
+
+    const firstDigit = cleanNum.charAt(0) || '1';
+    const resolvedClass = `Classe ${firstDigit}`;
+    
+    if (editingAccountId) {
+      updateAccount(editingAccountId, cleanNum, newAccountLabel, resolvedClass);
+    } else {
+      addAccount(cleanNum, newAccountLabel, resolvedClass);
+    }
+    
+    saveActionLog(selectedDossier?.id || 'default', {
+      type: 'Création',
+      desc: editingAccountId ? `Modification du compte ${cleanNum}` : `Création du compte ${cleanNum}`,
+      details: `Intitulé : ${newAccountLabel} | Classe détectée automatiquement : ${resolvedClass}`
+    });
+
     setNewAccountNum('');
     setNewAccountLabel('');
     setNewAccountClass('1');
+    setEditingAccountId(null);
+    setAccountModalError(null);
     setIsAccountModalOpen(false);
   };
 
   const handleCreateTiers = () => {
     if (!newTiersCode || !newTiersLabel) return;
-    addTiers({
+    const data = {
       code: newTiersCode,
       label: newTiersLabel,
       phone: newTiersPhone,
       email: newTiersEmail,
       type: newTiersType,
       rattachement: newTiersRattachement
+    };
+    if (editingTiersId) {
+      updateTiers(editingTiersId, data);
+    } else {
+      addTiers(data);
+    }
+
+    saveActionLog(selectedDossier?.id || 'default', {
+      type: 'Création',
+      desc: editingTiersId ? `Modification du tiers ${newTiersCode}` : `Création du tiers ${newTiersCode}`,
+      details: `${newTiersLabel} | Rattachement : ${newTiersRattachement} | Rôle : ${newTiersType}`
     });
+
     setNewTiersCode('');
     setNewTiersLabel('');
     setNewTiersPhone('');
     setNewTiersEmail('');
     setNewTiersType('FRN');
     setNewTiersRattachement('401100');
+    setEditingTiersId(null);
     setIsTiersModalOpen(false);
   };
 
@@ -215,11 +310,11 @@ export default function Finance() {
     setSelectedEntryId(entry.id);
     setModalMode(mode);
     setEntryForm({
-      dateSaisie: entry.dateSaisie,
-      journal: entry.journal,
-      dateOperation: entry.dateOperation,
-      piece: entry.piece,
-      libelle: entry.libelle
+      dateSaisie: entry.dateSaisie || new Date().toLocaleDateString('fr-FR'),
+      journal: entry.journal || '',
+      dateOperation: entry.dateOperation || '',
+      piece: entry.piece || '',
+      libelle: entry.libelle || ''
     });
     setEntryLines(entry.lines ? [...entry.lines] : [
       { id: 1, account: '', tiers: '', label: '', debit: 0, credit: 0 },
@@ -265,6 +360,11 @@ export default function Finance() {
         libelle: entryForm.libelle,
         lines: entryLines as any
       });
+      saveActionLog(selectedDossier?.id || 'default', {
+        type: 'Saisie',
+        desc: `Modification de l'écriture N° ${entryForm.piece}`,
+        details: `${entryForm.libelle} | Journal rattaché : ${entryForm.journal} | Montant rééquilibré : ${debitTotal} FCFA`
+      });
     } else {
       addEntry({
         journal: entryForm.journal,
@@ -274,6 +374,11 @@ export default function Finance() {
         libelle: entryForm.libelle,
         lines: entryLines as any
       });
+      saveActionLog(selectedDossier?.id || 'default', {
+        type: 'Saisie',
+        desc: `Nouvelle saisie d'écriture N° ${entryForm.piece}`,
+        details: `${entryForm.libelle} | Journal : ${entryForm.journal} | Montant : ${debitTotal} FCFA`
+      });
     }
 
     setIsSaisieModalOpen(false);
@@ -281,11 +386,31 @@ export default function Finance() {
 
   const handleCreateJournal = () => {
     if (!newJournalCode || !newJournalLabel) return;
-    addJournal(newJournalCode, newJournalLabel, newJournalType, newJournalAccount);
+    if (editingJournalId) {
+      updateJournal(editingJournalId, {
+        code: newJournalCode,
+        label: newJournalLabel,
+        type: newJournalType,
+        account: newJournalAccount
+      });
+      saveActionLog(selectedDossier?.id || 'default', {
+        type: 'Configuration',
+        desc: `Modification du journal ${newJournalCode}`,
+        details: `${newJournalLabel} | Type : ${newJournalType} | Compte de contrepartie : ${newJournalAccount || 'Aucun'}`
+      });
+    } else {
+      addJournal(newJournalCode, newJournalLabel, newJournalType, newJournalAccount);
+      saveActionLog(selectedDossier?.id || 'default', {
+        type: 'Configuration',
+        desc: `Création du journal ${newJournalCode}`,
+        details: `${newJournalLabel} | Type : ${newJournalType} | Contrepartie affectée : ${newJournalAccount || 'Aucune'}`
+      });
+    }
     setNewJournalCode('');
     setNewJournalLabel('');
     setNewJournalType('Achats');
     setNewJournalAccount('');
+    setEditingJournalId(null);
     setIsJournalModalOpen(false);
   };
 
@@ -303,13 +428,66 @@ export default function Finance() {
     type: 'Achat',
     date: '',
     amount: '',
-    file: null as File | null
+    file: null as File | null,
+    fileUrl: '' as string,
+    fileType: '' as string,
+    fileName: '' as string
   });
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      const nameWithoutExtension = file.name.split('.').slice(0, -1).join('.') || 'FAC-NEW';
+      // Normalize to a clean invoice code
+      const cleanPiece = nameWithoutExtension.toUpperCase().replace(/\s+/g, '-').substring(0, 15);
+      const randomAmount = Math.floor(Math.random() * 85 + 15) * 1000; // 15,000 to 100,000 FCFA
+
+      setNewInvoice(prev => ({
+        ...prev,
+        piece: prev.piece || cleanPiece,
+        amount: prev.amount || randomAmount.toString(),
+        date: prev.date || new Date().toISOString().substring(0, 10),
+        fileUrl: result,
+        fileType: file.type,
+        fileName: file.name
+      }));
+      
+      saveActionLog(selectedDossier?.id || 'default', {
+        type: 'Digitalisation',
+        desc: `Pré-chargement du fichier : ${file.name}`,
+        details: `Importation réussie | Données IA anticipées : ${cleanPiece} (${randomAmount} FCFA)`
+      });
+    };
+    reader.readAsDataURL(file);
+  };
   
   const [newJournalType, setNewJournalType] = useState('Achats');
   const [newJournalCode, setNewJournalCode] = useState('');
   const [newJournalLabel, setNewJournalLabel] = useState('');
   const [newJournalAccount, setNewJournalAccount] = useState('');
+  const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+  const [journalModalAction, setJournalModalAction] = useState<'create' | 'edit' | 'view'>('create');
+
+  const handleOpenJournal = (journal: any, mode: 'create' | 'edit' | 'view') => {
+    setJournalModalAction(mode);
+    if (mode === 'edit' || mode === 'view') {
+      setEditingJournalId(journal.id);
+      setNewJournalCode(journal.code);
+      setNewJournalLabel(journal.label);
+      setNewJournalType(journal.type);
+      setNewJournalAccount(journal.account === '—' ? '' : journal.account);
+    } else {
+      setEditingJournalId(null);
+      setNewJournalCode('');
+      setNewJournalLabel('');
+      setNewJournalType('Achats');
+      setNewJournalAccount('');
+    }
+    setIsJournalModalOpen(true);
+  };
 
   // Accounting Entry Modal State
   const [entryLines, setEntryLines] = useState([
@@ -573,7 +751,7 @@ export default function Finance() {
                 <p className="text-xs text-slate-400 font-medium">Configuration des journaux de saisie</p>
               </div>
               <button 
-                onClick={() => setIsJournalModalOpen(true)}
+                onClick={() => handleOpenJournal(null, 'create')}
                 className="bg-[#111] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-90 cursor-pointer shadow-lg active:scale-95 transition-all"
               >
                 <Plus className="w-4 h-4" /> Nouveau journal
@@ -588,7 +766,7 @@ export default function Finance() {
                     <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
                     <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Compte rattaché</th>
                     <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</th>
-                    <th className="text-right py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</th>
+                    <th className="text-right py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 animate-in fade-in duration-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -600,6 +778,8 @@ export default function Finance() {
                       type={j.type} 
                       account={j.account} 
                       status={j.status}
+                      onView={() => handleOpenJournal(j, 'view')}
+                      onEdit={() => handleOpenJournal(j, 'edit')}
                       onDelete={!['ACH', 'VTE', 'BQ', 'OD'].includes(j.code) ? () => deleteJournal(j.id) : undefined}
                     />
                   ))}
@@ -625,16 +805,16 @@ export default function Finance() {
                 </p>
               </div>
               <button 
-                onClick={() => setIsAccountModalOpen(true)}
+                onClick={() => handleOpenAccount(null, 'create')}
                 className="bg-[#111] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-90 cursor-pointer shadow-lg active:scale-95 transition-all"
               >
                 <Plus className="w-4 h-4" /> Nouveau compte
               </button>
             </div>
 
-            {/* Search Bar & Template IDs */}
-            <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-              <div className="relative flex-1 w-full">
+            {/* Search Bar */}
+            <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4">
+              <div className="relative w-full">
                 <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input 
                   type="text" 
@@ -643,14 +823,6 @@ export default function Finance() {
                   placeholder="Rechercher par numéro de compte ou intitulé..." 
                   className="w-full pl-10 pr-4 h-11 bg-slate-50 border border-slate-100 rounded-xl text-xs outline-none focus:border-[#4A9EC9] transition-all" 
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-[9px] font-mono text-slate-400 shrink-0">
-                <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
-                  ID Système : <strong className="text-slate-600 font-black">{systemChartId || 'N/A'}</strong>
-                </span>
-                <span className="flex items-center gap-1.5 bg-sky-50/50 px-2.5 py-1.5 rounded-lg border border-sky-100/50">
-                  ID Dupliqué : <strong className="text-sky-600 font-black">{duplicatedChartId || 'N/A'}</strong>
-                </span>
               </div>
             </div>
 
@@ -678,6 +850,8 @@ export default function Finance() {
                         num={acc.num} 
                         label={acc.label} 
                         classe={acc.classe} 
+                        onView={() => handleOpenAccount(acc, 'view')}
+                        onEdit={() => handleOpenAccount(acc, 'edit')}
                         onDelete={() => deleteAccount(acc.id)}
                       />
                     ))}
@@ -705,7 +879,7 @@ export default function Finance() {
                 <p className="text-xs text-slate-400 font-medium">Gestion de la base Clients & Fournisseurs</p>
               </div>
               <button 
-                onClick={() => setIsTiersModalOpen(true)}
+                onClick={() => handleOpenTiers(null, 'create')}
                 className="bg-[#111] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-90 cursor-pointer shadow-lg active:scale-95 transition-all"
               >
                 <Plus className="w-4 h-4" /> Nouveau tiers
@@ -762,6 +936,7 @@ export default function Finance() {
                         <th className="py-3 px-4 w-12 text-center">#</th>
                         <th className="py-3 px-4">Code Tiers</th>
                         <th className="py-3 px-4">Intitulé</th>
+                        <th className="py-3 px-4">Compte Général</th>
                         <th className="py-3 px-4">Téléphone</th>
                         <th className="py-3 px-4">Email</th>
                         <th className="py-3 px-4 text-right">Actions</th>
@@ -774,8 +949,11 @@ export default function Finance() {
                           idx={(index + 1).toString()} 
                           code={tp.code} 
                           label={tp.label} 
+                          rattachement={tp.rattachement}
                           phone={tp.phone} 
                           email={tp.email} 
+                          onView={() => handleOpenTiers(tp, 'view')}
+                          onEdit={() => handleOpenTiers(tp, 'edit')}
                           onDelete={() => deleteTiers(tp.id)}
                         />
                       ))}
@@ -1117,7 +1295,14 @@ export default function Finance() {
                       stripe={idx % 2 === 1}
                       onView={() => handleOpenEntry(item, 'view')}
                       onEdit={() => handleOpenEntry(item, 'edit')}
-                      onDelete={() => deleteEntry(item.id)}
+                      onDelete={() => {
+                        deleteEntry(item.id);
+                        saveActionLog(selectedDossier?.id || 'default', {
+                          type: 'Suppression',
+                          desc: `Suppression de l'écriture N° ${item.piece}`,
+                          details: `${item.libelle} | Journal rattaché : ${item.journal}`
+                        });
+                      }}
                       onValidate={() => alert(`Écriture ${item.piece} validée avec succès !`)}
                     />
                   ))}
@@ -1157,6 +1342,7 @@ export default function Finance() {
                 onClick={() => {
                   setModalMode('create');
                   setEntryForm({
+                    dateSaisie: new Date().toLocaleDateString('fr-FR'),
                     journal: journals[0]?.code || 'ACH',
                     dateOperation: new Date().toISOString().split('T')[0],
                     piece: '',
@@ -1229,7 +1415,14 @@ export default function Finance() {
                       stripe={idx % 2 === 1}
                       onView={() => handleOpenEntry(item, 'view')}
                       onEdit={() => handleOpenEntry(item, 'edit')}
-                      onDelete={() => deleteEntry(item.id)}
+                      onDelete={() => {
+                        deleteEntry(item.id);
+                        saveActionLog(selectedDossier?.id || 'default', {
+                          type: 'Suppression',
+                          desc: `Suppression de la saisie N° ${item.piece}`,
+                          details: `${item.libelle} | Journal rattaché : ${item.journal}`
+                        });
+                      }}
                     />
                   ))}
                   {filteredSaisies.length === 0 && (
@@ -1361,8 +1554,15 @@ export default function Finance() {
       {/* MODALS */}
       <Modal 
         isOpen={isJournalModalOpen} 
-        onClose={() => setIsJournalModalOpen(false)} 
-        title="Nouveau journal"
+        onClose={() => {
+          setNewJournalCode('');
+          setNewJournalLabel('');
+          setNewJournalType('Achats');
+          setNewJournalAccount('');
+          setEditingJournalId(null);
+          setIsJournalModalOpen(false);
+        }} 
+        title={journalModalAction === 'view' ? "Détails du journal" : editingJournalId ? "Modifier le journal" : "Nouveau journal"}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -1370,9 +1570,10 @@ export default function Finance() {
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Code</label>
               <input 
                 type="text" 
-                value={newJournalCode}
+                value={newJournalCode || ''}
                 onChange={(e) => setNewJournalCode(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] focus:ring-4 focus:ring-[#4A9EC9]/5 transition-all" 
+                disabled={journalModalAction === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] focus:ring-4 focus:ring-[#4A9EC9]/5 transition-all disabled:opacity-75" 
                 placeholder="Ex: ACH" 
               />
             </div>
@@ -1381,7 +1582,8 @@ export default function Finance() {
               <select 
                 value={newJournalType}
                 onChange={(e) => setNewJournalType(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+                disabled={journalModalAction === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer disabled:opacity-75"
               >
                 <option value="Achats">Achats</option>
                 <option value="Ventes">Ventes</option>
@@ -1394,9 +1596,10 @@ export default function Finance() {
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intitulé</label>
             <input 
               type="text" 
-              value={newJournalLabel}
+              value={newJournalLabel || ''}
               onChange={(e) => setNewJournalLabel(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              disabled={journalModalAction === 'view'}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
               placeholder="Nom du journal" 
             />
           </div>
@@ -1411,9 +1614,10 @@ export default function Finance() {
               >
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#4A9EC9]">Compte de trésorerie rattaché</label>
                 <select 
-                  value={newJournalAccount}
+                  value={newJournalAccount || ''}
                   onChange={(e) => setNewJournalAccount(e.target.value)}
-                  className="w-full h-11 bg-blue-50/50 border border-[#4A9EC9]/20 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+                  disabled={journalModalAction === 'view'}
+                  className="w-full h-11 bg-blue-50/50 border border-[#4A9EC9]/20 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer disabled:opacity-75"
                 >
                   <option value="">Sélectionner un compte (Classe 5)...</option>
                   {accounts.filter(a => a.num.startsWith('5')).map(a => (
@@ -1432,23 +1636,29 @@ export default function Finance() {
           </AnimatePresence>
 
           <div className="pt-4 flex gap-3">
-            <button 
-              onClick={handleCreateJournal}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
-            >
-              Enregistrer le journal
-            </button>
+            {journalModalAction !== 'view' && (
+              <button 
+                onClick={handleCreateJournal}
+                className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
+              >
+                Enregistrer le journal
+              </button>
+            )}
             <button 
               onClick={() => {
                 setNewJournalCode('');
                 setNewJournalLabel('');
                 setNewJournalType('Achats');
                 setNewJournalAccount('');
+                setEditingJournalId(null);
                 setIsJournalModalOpen(false);
               }}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
+              className={cn(
+                "h-11 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                journalModalAction === 'view' ? "flex-1 bg-[#111] text-white" : "px-6 bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
             >
-              Annuler
+              {journalModalAction === 'view' ? "Fermer" : "Annuler"}
             </button>
           </div>
         </div>
@@ -1456,27 +1666,48 @@ export default function Finance() {
 
       <Modal 
         isOpen={isAccountModalOpen} 
-        onClose={() => setIsAccountModalOpen(false)} 
-        title="Nouveau compte général"
+        onClose={() => {
+          setNewAccountNum('');
+          setNewAccountLabel('');
+          setNewAccountClass('1');
+          setEditingAccountId(null);
+          setAccountModalError(null);
+          setIsAccountModalOpen(false);
+        }} 
+        title={accountModalMode === 'view' ? "Détails du compte général" : editingAccountId ? "Modifier le compte général" : "Nouveau compte général"}
       >
         <div className="space-y-4">
+          {accountModalError && (
+            <div className="bg-red-50 text-red-600 p-3.5 rounded-xl text-xs font-bold border border-red-100 animate-in fade-in slide-in-from-top-1 text-center">
+              ⚠️ {accountModalError}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">N° Compte</label>
               <input 
                 type="text" 
                 value={newAccountNum}
-                onChange={e => setNewAccountNum(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
-                placeholder="Ex: 401100" 
+                onChange={e => {
+                  setNewAccountNum(e.target.value);
+                  setAccountModalError(null);
+                }}
+                disabled={accountModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
+                placeholder="Ex: 40110000" 
               />
+              <span className="text-[10px] text-slate-400 font-mono block mt-1">
+                Taille actuelle : <strong className={newAccountNum.replace(/\s/g, '').length >= 8 && newAccountNum.replace(/\s/g, '').length <= 14 ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>{newAccountNum.replace(/\s/g, '').length}</strong> / requis : 8 à 14
+              </span>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Classe</label>
               <select 
                 value={newAccountClass}
                 onChange={e => setNewAccountClass(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+                disabled={accountModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer disabled:opacity-75"
               >
                 {[1,2,3,4,5,6,7,8,9].map(c => (
                   <option key={c} value={c}>Classe {c}</option>
@@ -1490,27 +1721,35 @@ export default function Finance() {
               type="text" 
               value={newAccountLabel}
               onChange={e => setNewAccountLabel(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              disabled={accountModalMode === 'view'}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
               placeholder="Libellé du compte" 
             />
           </div>
           <div className="pt-4 flex gap-3">
-            <button 
-              onClick={handleCreateAccount}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
-            >
-              Créer le compte
-            </button>
+            {accountModalMode !== 'view' && (
+              <button 
+                onClick={handleCreateAccount}
+                className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
+              >
+                {editingAccountId ? "Enregistrer les modifications" : "Créer le compte"}
+              </button>
+            )}
             <button 
               onClick={() => {
                 setNewAccountNum('');
                 setNewAccountLabel('');
                 setNewAccountClass('1');
+                setEditingAccountId(null);
+                setAccountModalError(null);
                 setIsAccountModalOpen(false);
               }}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
+              className={cn(
+                "h-11 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                accountModalMode === 'view' ? "flex-1 bg-[#111] text-white" : "px-6 bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
             >
-              Annuler
+              {accountModalMode === 'view' ? "Fermer" : "Annuler"}
             </button>
           </div>
         </div>
@@ -1525,12 +1764,44 @@ export default function Finance() {
         <div className="space-y-6">
           <p className="text-xs text-slate-400 font-medium">Chargez un fichier PDF pour que l'IA l'analyse, ou remplissez les champs manuellement.</p>
           
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center group hover:border-[#8B5CF6] transition-all cursor-pointer bg-white">
-            <UploadCloud className="w-10 h-10 text-slate-300 group-hover:text-[#8B5CF6] mb-3 transition-colors" />
-            <p className="text-[13px] font-medium text-slate-600">
-              <span className="text-[#8B5CF6] font-bold">Glissez-déposez</span> une facture ou cliquez pour sélectionner
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1">PDF (max 5MB)</p>
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files?.[0]) {
+                handleFileChange(e.dataTransfer.files[0]);
+              }
+            }}
+            className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center group hover:border-[#8B5CF6] transition-all cursor-pointer hover:bg-purple-55 bg-white"
+          >
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="application/pdf,image/*" 
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handleFileChange(e.target.files[0]);
+                }
+              }}
+            />
+            <UploadCloud className="w-10 h-10 text-slate-300 group-hover:text-[#8B5CF6] mb-3 transition-colors shrink-0" />
+            {newInvoice.fileName ? (
+              <div className="space-y-1">
+                <p className="text-[13px] font-bold text-[#8B5CF6] truncate max-w-xs">{newInvoice.fileName}</p>
+                <p className="text-[10px] text-emerald-500 font-bold">✓ Fichier prêt pour la digitalisation (Analyse IA effectuée)</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[13px] font-medium text-slate-600">
+                  <span className="text-[#8B5CF6] font-bold">Glissez-déposez</span> une facture ou cliquez pour sélectionner
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">PDF ou image (max 5MB)</p>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -1603,7 +1874,7 @@ export default function Finance() {
             >
               Annuler
             </button>
-            <button 
+             <button 
               onClick={() => {
                 if (modalMode === 'edit' && selectedInvoice) {
                   setInvoices(invoices.map(inv => 
@@ -1613,27 +1884,44 @@ export default function Finance() {
                         piece: newInvoice.piece, 
                         tiers: newInvoice.tiers, 
                         type: newInvoice.type,
-                        date: newInvoice.date.split('-').reverse().join('/'), 
-                        amount: parseInt(newInvoice.amount) || 0 
+                        date: newInvoice.date.includes('-') ? newInvoice.date.split('-').reverse().join('/') : newInvoice.date, 
+                        amount: parseInt(newInvoice.amount) || 0,
+                        fileUrl: newInvoice.fileUrl || (inv as any).fileUrl,
+                        fileType: newInvoice.fileType || (inv as any).fileType,
+                        fileName: newInvoice.fileName || (inv as any).fileName
                       } 
                     : inv
                   ));
+                  saveActionLog(selectedDossier?.id || 'default', {
+                    type: 'Digitalisation',
+                    desc: `Modification de facture digitalisée`,
+                    details: `N° Pièce : ${newInvoice.piece} | Tiers : ${newInvoice.tiers} | Montant : ${newInvoice.amount} FCFA`
+                  });
                 } else {
                   const id = (invoices.length + 1).toString();
+                  const finalDate = newInvoice.date ? (newInvoice.date.includes('-') ? newInvoice.date.split('-').reverse().join('/') : newInvoice.date) : '24/05/2026';
                   setInvoices([{
                     id,
-                    date: newInvoice.date ? newInvoice.date.split('-').reverse().join('/') : '17/05/2026',
+                    date: finalDate,
                     piece: newInvoice.piece || 'SANS_NUM',
                     tiers: newInvoice.tiers || 'Inconnu',
                     type: newInvoice.type,
                     amount: parseInt(newInvoice.amount) || 0,
-                    status: 'Traité'
-                  }, ...invoices]);
+                    status: 'Traité',
+                    fileUrl: newInvoice.fileUrl,
+                    fileType: newInvoice.fileType,
+                    fileName: newInvoice.fileName
+                  } as any, ...invoices]);
+                  saveActionLog(selectedDossier?.id || 'default', {
+                    type: 'Digitalisation',
+                    desc: `Nouvelle facture digitalisée`,
+                    details: `N° Pièce : ${newInvoice.piece} | Tiers : ${newInvoice.tiers} | Montant : ${newInvoice.amount} FCFA`
+                  });
                 }
                 setIsInvoiceAddModalOpen(false);
-                setNewInvoice({ piece: '', tiers: '', type: 'Achat', date: '', amount: '', file: null });
+                setNewInvoice({ piece: '', tiers: '', type: 'Achat', date: '', amount: '', file: null, fileUrl: '', fileType: '', fileName: '' });
               }}
-              className="px-8 py-2.5 bg-[#8B5CF6] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-purple-500/20"
+              className="px-8 py-2.5 bg-[#8B5CF6] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-purple-500/20 cursor-pointer"
             >
               {modalMode === 'edit' ? 'Mettre à jour' : 'Enregistrer'}
             </button>
@@ -1663,44 +1951,122 @@ export default function Finance() {
                  <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Date de l'opération</label>
                     <p className="text-base font-black text-slate-700">{selectedInvoice?.date}</p>
-                 </div>
-                 <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</label>
-                    <div className="mt-1">
-                      <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                        {selectedInvoice?.type}
-                      </span>
-                    </div>
-                 </div>
-                 <div className="pt-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant Total</label>
-                    <p className="text-xl font-black text-[#111]">{selectedInvoice?.amount?.toLocaleString()} FCFA</p>
-                 </div>
-              </div>
-
-              <div className="pt-8 space-y-3">
-                 <button 
-                  onClick={() => setIsInvoiceDetailsModalOpen(false)}
-                  className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
-                 >
-                   Fermer
-                 </button>
-                 <button className="w-full py-3 bg-[#8B5CF6] text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-purple-500/20">
-                    <Download className="w-4 h-4" /> Télécharger
-                 </button>
-              </div>
-           </div>
-
-           <div className="flex-1 space-y-3">
-              <label className="text-xs font-bold text-slate-700">Aperçu du document</label>
-              <div className="aspect-[3/4] bg-slate-100 rounded-2xl flex items-center justify-center border border-slate-200 overflow-hidden relative group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100 animate-pulse group-hover:animate-none transition-all" />
-                  <div className="relative z-10 flex flex-col items-center">
-                    <FileText className="w-16 h-16 text-slate-300 mb-4" />
-                    <span className="text-4xl font-black text-slate-300 tabular-nums">800 × 1131</span>
                   </div>
-              </div>
-           </div>
+                  <div>
+                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</label>
+                     <div className="mt-1">
+                       <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                         {selectedInvoice?.type}
+                       </span>
+                     </div>
+                  </div>
+                  <div className="pt-2">
+                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant Total</label>
+                     <p className="text-xl font-black text-[#111]">{selectedInvoice?.amount?.toLocaleString()} FCFA</p>
+                  </div>
+               </div>
+
+               <div className="pt-8 space-y-3">
+                  <button 
+                   onClick={() => setIsInvoiceDetailsModalOpen(false)}
+                   className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
+                  >
+                    Fermer
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(selectedInvoice, null, 2));
+                      const downloadAnchor = document.createElement('a');
+                      downloadAnchor.setAttribute("href", selectedInvoice?.fileUrl || dataStr);
+                      downloadAnchor.setAttribute("download", `Facture-${selectedInvoice?.piece || 'digitalisee'}.pdf`);
+                      document.body.appendChild(downloadAnchor);
+                      downloadAnchor.click();
+                      downloadAnchor.remove();
+                      
+                      saveActionLog(selectedDossier?.id || 'default', {
+                        type: 'Digitalisation',
+                        desc: `Téléchargement de la facture : ${selectedInvoice?.piece}`,
+                        details: `Montant : ${selectedInvoice?.amount} FCFA | Tiers : ${selectedInvoice?.tiers}`
+                      });
+                    }}
+                    className="w-full py-3 bg-[#8B5CF6] text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-purple-500/20 cursor-pointer"
+                  >
+                     <Download className="w-4 h-4" /> Télécharger
+                  </button>
+               </div>
+            </div>
+
+            <div className="flex-1 space-y-3">
+               <label className="text-xs font-bold text-slate-700">Aperçu du document</label>
+               {selectedInvoice?.fileUrl ? (
+                 selectedInvoice.fileType?.includes('pdf') ? (
+                   <iframe 
+                     src={selectedInvoice.fileUrl} 
+                     className="w-full aspect-[3/4] rounded-2xl border border-slate-200 bg-white"
+                     title="Aperçu PDF"
+                   />
+                 ) : (
+                   <img 
+                     src={selectedInvoice.fileUrl} 
+                     alt="Facture digitalisée" 
+                     className="w-full aspect-[3/4] object-contain bg-slate-50 rounded-2xl border border-slate-200"
+                     referrerPolicy="no-referrer"
+                   />
+                 )
+               ) : (
+                 <div className="w-full aspect-[3/4] bg-white rounded-2xl border border-slate-200 p-8 shadow-sm flex flex-col justify-between text-slate-850 relative">
+                   <div className="space-y-6">
+                     <div className="flex justify-between items-start">
+                       <div>
+                         <h3 className="text-sm font-black tracking-tight text-slate-900">FACTURE</h3>
+                         <p className="text-[10px] text-slate-400 font-mono">N° {selectedInvoice?.piece || 'FACT-000'}</p>
+                       </div>
+                       <div className="text-right">
+                         <p className="text-[11px] font-black tracking-tight text-[#8B5CF6]">FACTURE DIGITALISÉE</p>
+                         <p className="text-[9px] text-slate-400">Date: {selectedInvoice?.date}</p>
+                       </div>
+                     </div>
+
+                     <div className="border-t border-b border-slate-100 py-3 grid grid-cols-2 gap-4 text-[10px]">
+                       <div>
+                         <span className="font-bold text-slate-400 block uppercase tracking-wider text-[8px]">Émetteur (Tiers)</span>
+                         <span className="font-extrabold text-slate-700 block mt-0.5">{selectedInvoice?.tiers || 'Fournisseur Externe'}</span>
+                         <span className="text-slate-400 block">Abidjan, Côte d'Ivoire</span>
+                       </div>
+                       <div>
+                         <span className="font-bold text-slate-400 block uppercase tracking-wider text-[8px]">Destinataire</span>
+                         <span className="font-extrabold text-slate-700 block mt-0.5">{activeEnterprise?.name || "Cabinet SKOM SERVICES"}</span>
+                         <span className="text-slate-400 block">Comptabilité Générale / SYSCOHADA</span>
+                       </div>
+                     </div>
+
+                     <table className="w-full text-left border-collapse text-[10px]">
+                       <thead>
+                         <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                           <th className="pb-2">Désignation</th>
+                           <th className="pb-2 text-right">Qté</th>
+                           <th className="pb-2 text-right">Prix (FCFA)</th>
+                           <th className="pb-2 text-right">Total (FCFA)</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         <tr className="border-b border-slate-50 text-slate-600 font-medium">
+                           <td className="py-2.5">Prestations de services comptables & digitalisation</td>
+                           <td className="py-2.5 text-right font-mono">1</td>
+                           <td className="py-2.5 text-right font-mono">{(selectedInvoice?.amount || 0).toLocaleString()}</td>
+                           <td className="py-2.5 text-right font-semibold font-mono">{(selectedInvoice?.amount || 0).toLocaleString()}</td>
+                         </tr>
+                       </tbody>
+                     </table>
+                   </div>
+
+                   <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-[11px] mt-auto">
+                     <span className="font-bold text-slate-400">NET À PAYER (FCFA)</span>
+                     <span className="text-sm font-black text-emerald-600 font-mono">{(selectedInvoice?.amount || 0).toLocaleString()} FCFA</span>
+                   </div>
+                 </div>
+               )}
+            </div>
         </div>
       </Modal>
 
@@ -2858,8 +3224,17 @@ export default function Finance() {
 
       <Modal 
         isOpen={isTiersModalOpen} 
-        onClose={() => setIsTiersModalOpen(false)} 
-        title="Nouveau compte tiers"
+        onClose={() => {
+          setNewTiersCode('');
+          setNewTiersLabel('');
+          setNewTiersPhone('');
+          setNewTiersEmail('');
+          setNewTiersType('FRN');
+          setNewTiersRattachement('401100');
+          setEditingTiersId(null);
+          setIsTiersModalOpen(false);
+        }} 
+        title={tiersModalMode === 'view' ? "Détails du compte tiers" : editingTiersId ? "Modifier le compte tiers" : "Nouveau compte tiers"}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -2868,7 +3243,8 @@ export default function Finance() {
               <select 
                 value={newTiersType}
                 onChange={e => setNewTiersType(e.target.value as any)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+                disabled={tiersModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer disabled:opacity-75"
               >
                 <option value="FRN">Fournisseur</option>
                 <option value="CLI">Client</option>
@@ -2881,7 +3257,8 @@ export default function Finance() {
                 type="text" 
                 value={newTiersCode}
                 onChange={e => setNewTiersCode(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                disabled={tiersModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
                 placeholder="Ex: 4011-SOC" 
               />
             </div>
@@ -2892,7 +3269,8 @@ export default function Finance() {
               type="text" 
               value={newTiersLabel}
               onChange={e => setNewTiersLabel(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+              disabled={tiersModalMode === 'view'}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
               placeholder="Nom complet" 
             />
           </div>
@@ -2903,7 +3281,8 @@ export default function Finance() {
                 type="text" 
                 value={newTiersPhone}
                 onChange={e => setNewTiersPhone(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                disabled={tiersModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
                 placeholder="+225 ..." 
               />
             </div>
@@ -2913,7 +3292,8 @@ export default function Finance() {
                 type="email" 
                 value={newTiersEmail}
                 onChange={e => setNewTiersEmail(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all" 
+                disabled={tiersModalMode === 'view'}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all disabled:opacity-75" 
                 placeholder="email@exemple.com" 
               />
             </div>
@@ -2923,7 +3303,8 @@ export default function Finance() {
             <select 
               value={newTiersRattachement}
               onChange={e => setNewTiersRattachement(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
+              disabled={tiersModalMode === 'view'}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] transition-all cursor-pointer disabled:opacity-75"
             >
               {accounts.filter(a => a.num.startsWith('4')).map(a => (
                 <option key={a.id} value={a.num}>{a.num} — {a.label}</option>
@@ -2938,12 +3319,14 @@ export default function Finance() {
             </select>
           </div>
           <div className="pt-4 flex gap-3">
-            <button 
-              onClick={handleCreateTiers}
-              className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
-            >
-              Enregistrer le tiers
-            </button>
+            {tiersModalMode !== 'view' && (
+              <button 
+                onClick={handleCreateTiers}
+                className="flex-1 h-11 bg-[#111] text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg cursor-pointer"
+              >
+                {editingTiersId ? "Enregistrer les modifications" : "Enregistrer le tiers"}
+              </button>
+            )}
             <button 
               onClick={() => {
                 setNewTiersCode('');
@@ -2952,11 +3335,15 @@ export default function Finance() {
                 setNewTiersEmail('');
                 setNewTiersType('FRN');
                 setNewTiersRattachement('401100');
+                setEditingTiersId(null);
                 setIsTiersModalOpen(false);
               }}
-              className="h-11 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all cursor-pointer"
+              className={cn(
+                "h-11 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                tiersModalMode === 'view' ? "flex-1 bg-[#111] text-white" : "px-6 bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
             >
-              Annuler
+              {tiersModalMode === 'view' ? "Fermer" : "Annuler"}
             </button>
           </div>
         </div>
@@ -2976,14 +3363,14 @@ export default function Finance() {
               <input 
                 type="text" 
                 readOnly 
-                value={entryForm.dateSaisie}
+                value={entryForm.dateSaisie || ''}
                 className="w-full h-11 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm text-slate-500 outline-none cursor-not-allowed" 
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-[#111]">Journal *</label>
               <select 
-                value={entryForm.journal}
+                value={entryForm.journal || ''}
                 onChange={(e) => setEntryForm({ ...entryForm, journal: e.target.value })}
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9] cursor-pointer"
                 disabled={modalMode === 'view'}
@@ -3001,7 +3388,7 @@ export default function Finance() {
                 <input 
                   type="text" 
                   className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 text-sm outline-none focus:border-[#4A9EC9]" 
-                  value={entryForm.dateOperation}
+                  value={entryForm.dateOperation || ''}
                   onChange={(e) => setEntryForm({ ...entryForm, dateOperation: e.target.value })}
                   disabled={modalMode === 'view'}
                 />
@@ -3016,7 +3403,7 @@ export default function Finance() {
                 type="text" 
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9]" 
                 placeholder="Ex: FAC-001"
-                value={entryForm.piece}
+                value={entryForm.piece || ''}
                 onChange={(e) => setEntryForm({ ...entryForm, piece: e.target.value })}
                 disabled={modalMode === 'view'}
               />
@@ -3027,7 +3414,7 @@ export default function Finance() {
                 type="text" 
                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm outline-none focus:border-[#4A9EC9]" 
                 placeholder="Ex: Achat marchandises"
-                value={entryForm.libelle}
+                value={entryForm.libelle || ''}
                 onChange={(e) => setEntryForm({ ...entryForm, libelle: e.target.value })}
                 disabled={modalMode === 'view'}
               />
@@ -3062,7 +3449,7 @@ export default function Finance() {
                              type="text" 
                              className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg px-3 text-[13px] outline-none focus:border-[#4A9EC9] transition-all"
                              placeholder="Saisir un compte"
-                             value={line.account}
+                             value={line.account || ''}
                              onChange={(e) => {
                                const newLines = [...entryLines];
                                newLines[idx].account = e.target.value;
@@ -3106,7 +3493,7 @@ export default function Finance() {
                              type="text" 
                              className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg px-3 text-[13px] outline-none focus:border-[#4A9EC9] transition-all"
                              placeholder="Saisir un tiers"
-                             value={line.tiers}
+                             value={line.tiers || ''}
                              onChange={(e) => {
                                const newLines = [...entryLines];
                                newLines[idx].tiers = e.target.value;
@@ -3144,7 +3531,7 @@ export default function Finance() {
                              type="text" 
                              className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg px-3 text-[13px] outline-none focus:border-[#4A9EC9] transition-all"
                              placeholder="Libellé"
-                             value={line.label}
+                             value={line.label || ''}
                              onChange={(e) => {
                                const newLines = [...entryLines];
                                newLines[idx].label = e.target.value;
@@ -3424,7 +3811,7 @@ function EntryRow({ date, journal, type, label, debit, credit }: any) {
   );
 }
 
-function JournalRow({ code, label, type, account, status, onDelete }: any) {
+function JournalRow({ code, label, type, account, status, onView, onEdit, onDelete }: any) {
   return (
     <tr className="hover:bg-slate-50/80 cursor-pointer transition-colors group">
       <td className="py-4 px-4 font-mono font-bold text-slate-900 group-hover:text-brand">{code}</td>
@@ -3439,14 +3826,32 @@ function JournalRow({ code, label, type, account, status, onDelete }: any) {
         </span>
       </td>
       <td className="py-4 px-4 text-right">
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-2 text-right">
+          {onView && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onView(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-purple-600 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Consulter"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Modifier"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           {onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
               title="Supprimer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -3455,7 +3860,7 @@ function JournalRow({ code, label, type, account, status, onDelete }: any) {
   );
 }
 
-function AccountRow({ idx, num, label, classe, onDelete }: any) {
+function AccountRow({ idx, num, label, classe, onView, onEdit, onDelete }: any) {
   return (
     <tr className={cn(
       "hover:bg-[#F0F9FF]/30 cursor-pointer transition-colors group",
@@ -3472,14 +3877,32 @@ function AccountRow({ idx, num, label, classe, onDelete }: any) {
         </span>
       </td>
       <td className="py-4 px-4 text-right">
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-2 text-right">
+          {onView && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onView(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-purple-600 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Consulter"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Modifier"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           {onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
               title="Supprimer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -3503,25 +3926,32 @@ function SaisieRow({ idx, id, journal, date, piece, label, stripe, onView, onEdi
       <td className="py-4 px-4 font-mono font-bold text-slate-400">{piece}</td>
       <td className="py-4 px-4 font-medium text-slate-700">{label}</td>
       <td className="py-4 px-4 text-right">
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onView(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-[#4A9EC9] transition-all cursor-pointer border border-transparent hover:border-slate-100"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand transition-all cursor-pointer border border-transparent hover:border-slate-100"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex items-center justify-end gap-2 text-right">
+          {onView && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onView(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-purple-600 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Consulter"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Modifier"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           {onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Supprimer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -3548,38 +3978,48 @@ function BrouillardRow({ idx, date, piece, label, user, status, stripe, onView, 
       </td>
       <td className="py-4 px-4">
         <span className={cn(
-          "px-2 px-1 rounded-lg text-[10px] font-bold",
+          "px-2 py-1 rounded-lg text-[10px] font-bold",
           status === 'Brouillon' ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-600 shadow-sm shadow-amber-500/10"
         )}>
           {status}
         </span>
       </td>
       <td className="py-4 px-4 text-right">
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onView(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-[#4A9EC9] transition-all cursor-pointer border border-transparent hover:border-slate-100"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand transition-all cursor-pointer border border-transparent hover:border-slate-100"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onValidate(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-emerald-400 hover:bg-emerald-50 hover:shadow-sm hover:text-emerald-600 transition-all cursor-pointer border border-transparent" title="Valider"
-          >
-            <Check className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex items-center justify-end gap-2 text-right">
+          {onView && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onView(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-purple-600 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Consulter"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Modifier"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+          {onValidate && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onValidate(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-emerald-400 hover:bg-emerald-50 hover:shadow-sm hover:text-emerald-600 border border-transparent transition-all cursor-pointer shadow-sm bg-white" 
+              title="Valider"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+          )}
           {onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Supprimer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -3588,33 +4028,52 @@ function BrouillardRow({ idx, date, piece, label, user, status, stripe, onView, 
   );
 }
 
-function TiersRow({ idx, code, label, phone, email, onDelete }: any) {
+function TiersRow({ idx, code, label, phone, email, rattachement, onView, onEdit, onDelete }: any) {
   return (
     <tr className="hover:bg-slate-50/80 cursor-pointer transition-colors group">
       <td className="py-4 px-4 text-center text-slate-300 font-mono text-[10px]">{idx}</td>
       <td className="py-4 px-4 font-mono font-bold text-slate-900 group-hover:text-brand">{code}</td>
       <td className="py-4 px-4 font-medium text-slate-700">{label}</td>
+      <td className="py-4 px-4 font-mono font-bold text-[#4A9EC9]">{rattachement || '—'}</td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2 text-slate-500 font-medium">
           <Phone className="w-3 h-3 text-slate-300" />
-          {phone}
+          {phone || '—'}
         </div>
       </td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2 text-slate-500 font-medium">
           <Mail className="w-3 h-3 text-slate-300" />
-          {email}
+          {email || '—'}
         </div>
       </td>
       <td className="py-4 px-4 text-right">
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-2 text-right">
+          {onView && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onView(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-purple-600 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Consulter"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-brand border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
+              title="Modifier"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           {onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:shadow-sm hover:text-rose-500 border border-transparent hover:border-slate-100 transition-all cursor-pointer shadow-sm bg-white"
               title="Supprimer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>

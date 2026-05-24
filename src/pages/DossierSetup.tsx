@@ -412,12 +412,18 @@ export default function DossierSetup() {
                     <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3 block text-center italic">Digits {item.l}</label>
                     <div className="flex items-center justify-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                        <button 
-                        onClick={() => setFormData({ ...formData, config: { ...formData.config, [item.k]: Math.max(4, formData.config[item.k as keyof typeof formData.config] as number - 1) } })}
+                        onClick={() => {
+                          const minVal = item.k === 'accountLength' ? 8 : 4;
+                          setFormData({ ...formData, config: { ...formData.config, [item.k]: Math.max(minVal, (formData.config[item.k as keyof typeof formData.config] as number) - 1) } });
+                        }}
                         className="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center font-black text-slate-900 border border-slate-100 hover:bg-slate-50"
                        >-</button>
                        <span className="text-xl font-black text-slate-900 tabular-nums">{formData.config[item.k as keyof typeof formData.config]}</span>
                        <button 
-                        onClick={() => setFormData({ ...formData, config: { ...formData.config, [item.k]: Math.min(12, formData.config[item.k as keyof typeof formData.config] as number + 1) } })}
+                        onClick={() => {
+                          const maxVal = item.k === 'accountLength' ? 14 : 12;
+                          setFormData({ ...formData, config: { ...formData.config, [item.k]: Math.min(maxVal, (formData.config[item.k as keyof typeof formData.config] as number) + 1) } });
+                        }}
                         className="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center font-black text-slate-900 border border-slate-100 hover:bg-slate-50"
                        >+</button>
                     </div>

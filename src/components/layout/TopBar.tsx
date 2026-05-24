@@ -19,15 +19,23 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { DossierSelectorModal } from '../modals/DossierSelectorModal';
+import { getActionLogs, saveActionLog } from '../../lib/auditLogger';
 
 export const TopBar = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
-  const { selectedDossier, activeEnterprise } = useCompany();
+  const { selectedDossier, dossiers, setSelectedDossier, activeEnterprise } = useCompany();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [currentTime, setCurrentTime] = React.useState(new Date());
+
+  // Audit Logs modal states
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditStartDate, setAuditStartDate] = useState('');
+  const [auditEndDate, setAuditEndDate] = useState('');
+  const [auditTypeFilter, setAuditTypeFilter] = useState('');
 
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -84,18 +92,38 @@ export const TopBar = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onTogg
         </div>
 
         <div className="flex items-center gap-3 pr-4 border-r border-slate-100 relative">
+          {/* Direct Dropdown Dossier Switcher */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-xl px-2.5 h-10 group focus-within:bg-white focus-within:border-brand/35 transition-all">
+            <FolderSync className="w-3.5 h-3.5 text-slate-400" />
+            <select 
+              value={selectedDossier?.id || ''}
+              onChange={(e) => {
+                const d = dossiers.find(x => x.id === e.target.value);
+                if (d) {
+                  setSelectedDossier(d);
+                  saveActionLog(d.id, {
+                    type: 'Consultation',
+                    desc: 'Dossier actif modifié',
+                    details: `Ouverture du dossier comptable : ${d.filename}`
+                  });
+                }
+              }}
+              className="bg-transparent border-none text-[10px] font-black text-slate-800 uppercase tracking-wider outline-none cursor-pointer pr-1"
+            >
+              {dossiers.map(d => (
+                <option key={d.id} value={d.id} className="text-xs uppercase">{d.filename}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Audit Logs Trigger Button */}
           <button 
-            onClick={() => setShowDossierModal(true)} 
-            className="group flex items-center gap-3 px-3 h-10 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-900 transition-all duration-300 shadow-sm"
+            onClick={() => setShowAuditModal(true)}
+            className="group flex items-center justify-center gap-1.5 px-3 h-10 bg-slate-50 hover:bg-slate-900 border border-slate-100 rounded-xl transition-all shadow-sm cursor-pointer"
+            title="Consulter l'historique de journalisation"
           >
-            <div className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center group-hover:bg-brand/20 group-hover:border-brand/30 transition-colors">
-              <FolderSync className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand transition-colors" />
-            </div>
-            <div className="text-left hidden lg:block">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5 group-hover:text-slate-500">Changer Dossier</p>
-              <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight leading-none group-hover:text-white truncate max-w-[100px]">{selectedDossier?.filename || 'Sélectionner'}</p>
-            </div>
-            <ChevronDown className="w-3 h-3 text-slate-300 group-hover:text-white transition-colors ml-1 hidden lg:block" />
+            <History className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand transition-colors" />
+            <span className="text-[9px] font-black text-slate-500 group-hover:text-white uppercase tracking-widest hidden md:inline-block">Journal d'audit</span>
           </button>
           
           <div className="relative">
@@ -219,6 +247,186 @@ export const TopBar = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onTogg
           </AnimatePresence>
         </div>
       </div>
+
+      {/* AUDIT LOGS MODAL */}
+      <AnimatePresence>
+        {showAuditModal && (
+          <div className="fixed inset-0 bg-[#09090b]/40 backdrop-blur-sm flex items-center justify-center z-[110] p-4 font-sans animate-in fade-in duration-305">
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-[2.5rem] border border-slate-150 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+                    <span className="text-[10px] font-black text-brand uppercase tracking-[0.2em]">Tracé d'Audit & Historique</span>
+                  </div>
+                  <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Journalisation Système</h2>
+                  <p className="text-[11px] text-slate-400 font-medium">Suivi complet et traçabilité des actions comptables du dossier courant</p>
+                </div>
+                <button 
+                  onClick={() => setShowAuditModal(false)}
+                  className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center cursor-pointer transition-all border border-transparent hover:border-slate-200"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              {/* Filters Toolbar */}
+              <div className="p-6 bg-white border-b border-slate-50 shrink-0 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher par mot clé..." 
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    className="w-full pl-9 h-11 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-brand transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <select 
+                    value={auditTypeFilter}
+                    onChange={e => setAuditTypeFilter(e.target.value)}
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-brand cursor-pointer"
+                  >
+                    <option value="">Tous les types d'actions</option>
+                    <option value="Saisie">Saisie Comptable</option>
+                    <option value="Création">Création de données</option>
+                    <option value="Digitalisation">Digitalisation & Transmissions</option>
+                    <option value="Configuration">Configurations Système</option>
+                    <option value="Consultation">Consultation d'états</option>
+                    <option value="Suppression">Suppression d'écritures</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Du</span>
+                  <input 
+                    type="date" 
+                    value={auditStartDate}
+                    onChange={e => setAuditStartDate(e.target.value)}
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs outline-none focus:border-brand font-bold"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Au</span>
+                  <input 
+                    type="date" 
+                    value={auditEndDate}
+                    onChange={e => setAuditEndDate(e.target.value)}
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs outline-none focus:border-brand font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Data Table */}
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/20">
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden min-h-[300px]">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50/30 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                        <th className="py-3 px-6">Horodatage</th>
+                        <th className="py-3 px-6">Utilisateur</th>
+                        <th className="py-3 px-6">Nature</th>
+                        <th className="py-3 px-6">Opération</th>
+                        <th className="py-3 px-6">Détails de traçabilité</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {getActionLogs(selectedDossier?.id || 'default')
+                        .filter(log => {
+                          if (auditSearch) {
+                            const kw = auditSearch.toLowerCase();
+                            return log.desc.toLowerCase().includes(kw) || 
+                                   log.details.toLowerCase().includes(kw) || 
+                                   log.user.toLowerCase().includes(kw) ||
+                                   log.type.toLowerCase().includes(kw);
+                          }
+                          return true;
+                        })
+                        .filter(log => {
+                          if (auditTypeFilter) {
+                            return log.type.toLowerCase() === auditTypeFilter.toLowerCase();
+                          }
+                          return true;
+                        })
+                        .filter(log => {
+                          if (auditStartDate) {
+                            const logD = new Date(log.dateSec);
+                            const startD = new Date(auditStartDate);
+                            startD.setHours(0,0,0,0);
+                            return logD >= startD;
+                          }
+                          return true;
+                        })
+                        .filter(log => {
+                          if (auditEndDate) {
+                            const logD = new Date(log.dateSec);
+                            const endD = new Date(auditEndDate);
+                            endD.setHours(23,59,59,999);
+                            return logD <= endD;
+                          }
+                          return true;
+                        })
+                        .map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50/50 transition-all font-sans">
+                            <td className="py-4 px-6 text-slate-400 font-medium whitespace-nowrap">
+                              <span className="font-bold text-slate-705">{log.date}</span> à {log.time}
+                            </td>
+                            <td className="py-4 px-6 font-bold text-slate-900">{log.user}</td>
+                            <td className="py-4 px-6">
+                              <span className={cn(
+                                "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest inline-block",
+                                log.type === 'Saisie' ? "bg-cyan-50 text-cyan-600" :
+                                log.type === 'Digitalisation' ? "bg-purple-50 text-purple-600" :
+                                log.type === 'Création' ? "bg-emerald-50 text-emerald-600" :
+                                log.type === 'Suppression' ? "bg-rose-50 text-rose-600" :
+                                "bg-slate-100 text-slate-600"
+                              )}>
+                                {log.type}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-slate-800">{log.desc}</td>
+                            <td className="py-4 px-6 text-slate-500 font-medium italic">{log.details}</td>
+                          </tr>
+                        ))}
+                      {getActionLogs(selectedDossier?.id || 'default').filter(log => {
+                          if (auditSearch) {
+                            const kw = auditSearch.toLowerCase();
+                            return log.desc.toLowerCase().includes(kw) || 
+                                   log.details.toLowerCase().includes(kw) || 
+                                   log.user.toLowerCase().includes(kw) ||
+                                   log.type.toLowerCase().includes(kw);
+                          }
+                          return true;
+                        })
+                        .filter(log => {
+                          if (auditTypeFilter) {
+                            return log.type.toLowerCase() === auditTypeFilter.toLowerCase();
+                          }
+                          return true;
+                        }).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-16 text-center text-slate-300 uppercase tracking-widest font-black text-[10px] bg-white">
+                            Aucun enregistrement trouvé
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <DossierSelectorModal 
         isOpen={showDossierModal} 

@@ -109,8 +109,10 @@ interface CompanyContextType {
   
   // Custom mutations to persist per enterprise/dossier
   addAccount: (num: string, label: string, classe: string) => void;
+  updateAccount: (id: string, num: string, label: string, classe: string) => void;
   deleteAccount: (id: string) => void;
   addTiers: (tiers: Omit<DuplicatedTiers, 'id'>) => void;
+  updateTiers: (id: string, tiers: Partial<Omit<DuplicatedTiers, 'id'>>) => void;
   deleteTiers: (id: string) => void;
 
   // Dynamic Journals & Saisie Entries
@@ -118,6 +120,7 @@ interface CompanyContextType {
   entries: JournalEntry[];
   addJournal: (code: string, label: string, type: string, account?: string) => void;
   deleteJournal: (id: string) => void;
+  updateJournal: (id: string, journal: Partial<Omit<CustomJournal, 'id'>>) => void;
   addEntry: (entry: Omit<JournalEntry, 'id' | 'numSaisie'>) => void;
   deleteEntry: (id: string) => void;
   updateEntry: (id: string, entry: Partial<JournalEntry>) => void;
@@ -165,17 +168,34 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     // Initial load for accounts - load custom or duplicate standard template
     const localStoreAccounts = localStorage.getItem(dupId);
     let loadedAccounts: DuplicatedAccount[] = [];
-    if (localStoreAccounts) {
-      loadedAccounts = JSON.parse(localStoreAccounts);
-    } else {
-      // Duplicate standard template
-      const template = getSystemChartTemplate(selectedDossier.accountingConfig?.accountingLaw || '');
-      loadedAccounts = template.map((acc, index) => ({
-        id: `${selectedDossier.id}-acc-${acc.num}-${index}`,
-        num: acc.num,
+    
+    const template = getSystemChartTemplate(selectedDossier.accountingConfig?.accountingLaw || '');
+    const rawLen = selectedDossier.accountingConfig?.accountLength || 8;
+    const len = Math.max(8, Math.min(14, rawLen));
+    const templateAccounts: DuplicatedAccount[] = template.map((acc, index) => {
+      const clean = acc.num.replace(/\s/g, '');
+      const paddedNum = clean.length < len ? clean.padEnd(len, '0') : clean.substring(0, len);
+      return {
+        id: `${selectedDossier.id}-acc-${paddedNum}-${index}`,
+        num: paddedNum,
         label: acc.label,
         classe: acc.classe
-      }));
+      };
+    });
+
+    if (localStoreAccounts) {
+      const existingAccounts: DuplicatedAccount[] = JSON.parse(localStoreAccounts);
+      const existingNums = new Set(existingAccounts.map(a => a.num));
+      const missingFromTemplate = templateAccounts.filter(ta => !existingNums.has(ta.num));
+      
+      if (missingFromTemplate.length > 0) {
+        loadedAccounts = [...existingAccounts, ...missingFromTemplate].sort((a, b) => a.num.localeCompare(b.num));
+        localStorage.setItem(dupId, JSON.stringify(loadedAccounts));
+      } else {
+        loadedAccounts = existingAccounts;
+      }
+    } else {
+      loadedAccounts = templateAccounts;
       localStorage.setItem(dupId, JSON.stringify(loadedAccounts));
     }
     setAccounts(loadedAccounts);
@@ -266,13 +286,30 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
   const addAccount = (num: string, label: string, classe: string) => {
     if (!selectedDossier || !duplicatedChartId) return;
+    const rawLen = selectedDossier.accountingConfig?.accountLength || 8;
+    const len = Math.max(8, Math.min(14, rawLen));
+    const cleanNum = num.replace(/\s/g, '');
+    const formattedNum = cleanNum.length < len ? cleanNum.padEnd(len, '0') : cleanNum.substring(0, len);
+
     const newAccount: DuplicatedAccount = {
-      id: `${selectedDossier.id}-acc-${num}-${Date.now()}`,
-      num,
+      id: `${selectedDossier.id}-acc-${formattedNum}-${Date.now()}`,
+      num: formattedNum,
       label,
       classe
     };
     const updated = [...accounts, newAccount].sort((a, b) => a.num.localeCompare(b.num));
+    setAccounts(updated);
+    localStorage.setItem(duplicatedChartId, JSON.stringify(updated));
+  };
+
+  const updateAccount = (id: string, num: string, label: string, classe: string) => {
+    if (!selectedDossier || !duplicatedChartId) return;
+    const rawLen = selectedDossier.accountingConfig?.accountLength || 8;
+    const len = Math.max(8, Math.min(14, rawLen));
+    const cleanNum = num.replace(/\s/g, '');
+    const formattedNum = cleanNum.length < len ? cleanNum.padEnd(len, '0') : cleanNum.substring(0, len);
+
+    const updated = accounts.map(a => a.id === id ? { ...a, num: formattedNum, label, classe } : a).sort((a, b) => a.num.localeCompare(b.num));
     setAccounts(updated);
     localStorage.setItem(duplicatedChartId, JSON.stringify(updated));
   };
@@ -292,6 +329,14 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       id: `${selectedDossier.id}-tp-${tiers.code}-${Date.now()}`
     };
     const updated = [...thirdParties, newTiersItem];
+    setThirdParties(updated);
+    localStorage.setItem(tiersKey, JSON.stringify(updated));
+  };
+
+  const updateTiers = (id: string, updatedData: Partial<Omit<DuplicatedTiers, 'id'>>) => {
+    if (!selectedDossier) return;
+    const tiersKey = `tiers-${selectedDossier.id}`;
+    const updated = thirdParties.map(t => t.id === id ? { ...t, ...updatedData } : t);
     setThirdParties(updated);
     localStorage.setItem(tiersKey, JSON.stringify(updated));
   };
@@ -329,15 +374,25 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(journalsKey, JSON.stringify(updated));
   };
 
+  const updateJournal = (id: string, updatedData: Partial<Omit<CustomJournal, 'id'>>) => {
+    if (!selectedDossier) return;
+    const journalsKey = `journals-${selectedDossier.id}`;
+    const updated = journals.map(j => j.id === id ? { ...j, ...updatedData } : j);
+    setJournals(updated);
+    localStorage.setItem(journalsKey, JSON.stringify(updated));
+  };
+
   // Saisie Entry Mutations
   const addEntry = (entry: Omit<JournalEntry, 'id' | 'numSaisie'>) => {
     if (!selectedDossier) return;
     const entriesKey = `entries-${selectedDossier.id}`;
     
-    // Generate S-XXXX sequential number
-    const sequenceNum = entries.length + 1;
-    const seqStr = sequenceNum.toString().padStart(4, '0');
-    const numSaisie = `S-${seqStr}`;
+    // Generate sequential number composed of Journal + Year + 5-digit sequence (e.g., ACH-2026-00001)
+    const entryYear = entry.dateOperation ? entry.dateOperation.substring(0, 4) : new Date().getFullYear().toString();
+    const journalMatches = entries.filter(e => e.journal === entry.journal && e.dateOperation.startsWith(entryYear));
+    const nextSeq = journalMatches.length + 1;
+    const seqStr = nextSeq.toString().padStart(5, '0');
+    const numSaisie = `${entry.journal || 'G'}-${entryYear}-${seqStr}`;
 
     const newEntryItem: JournalEntry = {
       ...entry,
@@ -446,13 +501,16 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       accounts,
       thirdParties,
       addAccount,
+      updateAccount,
       deleteAccount,
       addTiers,
+      updateTiers,
       deleteTiers,
       journals,
       entries,
       addJournal,
       deleteJournal,
+      updateJournal,
       addEntry,
       deleteEntry,
       updateEntry
