@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCompany } from '../../context/CompanyContext';
 import { Logo } from '../../components/ui/Logo';
+import { saveActionLog } from '../../lib/auditLogger';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Target, 
@@ -45,7 +46,7 @@ type Module = 'tdb' | 'skom' | 'rh' | 'logistics' | 'marketing';
 
 export default function Marketing() {
   const { user } = useAuth();
-  const { activeEnterprise } = useCompany();
+  const { activeEnterprise, selectedDossier, dossiers, setSelectedDossier } = useCompany();
   const [activePage, setActivePage] = useState<string>('mkt-tdb');
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
@@ -141,6 +142,30 @@ export default function Marketing() {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          {/* Direct Dropdown Dossier Switcher */}
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 h-8 hover:bg-white/10 transition-all">
+            <Folder className="w-3.5 h-3.5 text-white/50" />
+            <select 
+              value={selectedDossier?.id || ''}
+              onChange={(e) => {
+                const d = dossiers.find(x => x.id === e.target.value);
+                if (d) {
+                  setSelectedDossier(d);
+                  saveActionLog(d.id, {
+                    type: 'Consultation',
+                    desc: 'Dossier actif modifié',
+                    details: `Ouverture du dossier comptable : ${d.filename}`
+                  });
+                }
+              }}
+              className="bg-transparent border-none text-[10px] font-black text-white/80 uppercase tracking-wider outline-none cursor-pointer pr-1"
+            >
+              {dossiers.map(d => (
+                <option key={d.id} value={d.id} className="text-xs uppercase bg-[#111] text-white">{d.filename}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-all">
             <Building2 className="w-3.5 h-3.5 text-white/80" />
             <span className="text-[11px] font-medium text-white/80 uppercase tracking-tight">{activeEnterprise?.name || 'GEST-ETEST-2026'}</span>

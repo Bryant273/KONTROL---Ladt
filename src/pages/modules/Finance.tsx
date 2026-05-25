@@ -97,6 +97,8 @@ export default function Finance() {
   const { 
     activeEnterprise, 
     selectedDossier, 
+    setSelectedDossier,
+    dossiers,
     systemChartId, 
     duplicatedChartId, 
     accounts, 
@@ -519,13 +521,28 @@ export default function Finance() {
   const isAdmin = user?.email?.includes('admin') || true; // Simplified for now
 
   useEffect(() => {
-    if (location.state?.module) {
+    const path = location.pathname;
+    if (path.includes('/app/finance/invoices')) {
+      setCurrentModule('skom');
+      setActivePage('digit-factures');
+    } else if (path.includes('/app/finance/journals')) {
+      setCurrentModule('skom');
+      setActivePage('journal');
+    } else if (path.includes('/app/finance/ledger')) {
+      setCurrentModule('skom');
+      setActivePage('grand-livre');
+    } else if (path.includes('/app/finance/balance')) {
+      setCurrentModule('skom');
+      setActivePage('balance');
+    } else if (location.state?.module) {
       setCurrentModule(location.state.module);
       if (location.state.module === 'skom') {
         setActivePage('skom-tdb');
       }
     }
-  }, [location.state]);
+  }, [location.pathname, location.state]);
+
+  // Active page state binds locally within the Finance module layout without forcing global routing transitions
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -1536,6 +1553,30 @@ export default function Finance() {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          {/* Direct Dropdown Dossier Switcher */}
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 h-8 hover:bg-white/10 transition-all">
+            <Folder className="w-3.5 h-3.5 text-white/50" />
+            <select 
+              value={selectedDossier?.id || ''}
+              onChange={(e) => {
+                const d = dossiers.find(x => x.id === e.target.value);
+                if (d) {
+                  setSelectedDossier(d);
+                  saveActionLog(d.id, {
+                    type: 'Consultation',
+                    desc: 'Dossier actif modifié',
+                    details: `Ouverture du dossier comptable : ${d.filename}`
+                  });
+                }
+              }}
+              className="bg-transparent border-none text-[10px] font-black text-white/80 uppercase tracking-wider outline-none cursor-pointer pr-1"
+            >
+              {dossiers.map(d => (
+                <option key={d.id} value={d.id} className="text-xs uppercase bg-[#111] text-white">{d.filename}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-all">
             <Building2 className="w-3.5 h-3.5 text-white/80" />
             <span className="text-[11px] font-medium text-white/80 uppercase tracking-tight">{activeEnterprise?.name || 'GEST-ETEST-2026'}</span>

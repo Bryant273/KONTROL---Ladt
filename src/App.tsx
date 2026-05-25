@@ -19,6 +19,10 @@ import Dossiers from './pages/modules/Dossiers';
 import Notifications from './pages/modules/Notifications';
 import RH from './pages/modules/RH';
 import Finance from './pages/modules/Finance';
+import InvoicesAdminPage from './pages/modules/InvoicesAdminPage';
+import JournalsAdminPage from './pages/modules/JournalsAdminPage';
+import LedgerAdminPage from './pages/modules/LedgerAdminPage';
+import BalanceAdminPage from './pages/modules/BalanceAdminPage';
 import Logistics from './pages/modules/Logistics';
 import Marketing from './pages/modules/Marketing';
 import Skomptab from './pages/solutions/Skomptab';
@@ -115,6 +119,10 @@ function AppRoutes() {
         
         {/* Module Specific Routes */}
         <Route path="/app/rh/*" element={<ProtectedRoute><RH /></ProtectedRoute>} />
+        <Route path="/app/finance/invoices" element={<ProtectedRoute><InvoicesAdminPage /></ProtectedRoute>} />
+        <Route path="/app/finance/journals" element={<ProtectedRoute><JournalsAdminPage /></ProtectedRoute>} />
+        <Route path="/app/finance/ledger" element={<ProtectedRoute><LedgerAdminPage /></ProtectedRoute>} />
+        <Route path="/app/finance/balance" element={<ProtectedRoute><BalanceAdminPage /></ProtectedRoute>} />
         <Route path="/app/finance/*" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
         <Route path="/app/logistics/*" element={<ProtectedRoute><Logistics /></ProtectedRoute>} />
         <Route path="/app/marketing/*" element={<ProtectedRoute><Marketing /></ProtectedRoute>} />

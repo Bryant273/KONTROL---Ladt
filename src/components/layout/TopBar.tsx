@@ -116,15 +116,7 @@ export const TopBar = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onTogg
             </select>
           </div>
 
-          {/* Audit Logs Trigger Button */}
-          <button 
-            onClick={() => setShowAuditModal(true)}
-            className="group flex items-center justify-center gap-1.5 px-3 h-10 bg-slate-50 hover:bg-slate-900 border border-slate-100 rounded-xl transition-all shadow-sm cursor-pointer"
-            title="Consulter l'historique de journalisation"
-          >
-            <History className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand transition-colors" />
-            <span className="text-[9px] font-black text-slate-500 group-hover:text-white uppercase tracking-widest hidden md:inline-block">Journal d'audit</span>
-          </button>
+
           
           <div className="relative">
             <button 
