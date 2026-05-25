@@ -352,13 +352,20 @@ export default function Finance() {
       return;
     }
 
+    const cleanedLines = entryLines.map(l => {
+      if (!isTiersAccount(l.account)) {
+        return { ...l, tiers: '' };
+      }
+      return l;
+    });
+
     if (modalMode === 'edit' && selectedEntryId) {
       updateEntry(selectedEntryId, {
         journal: entryForm.journal,
         dateOperation: entryForm.dateOperation,
         piece: entryForm.piece,
         libelle: entryForm.libelle,
-        lines: entryLines as any
+        lines: cleanedLines as any
       });
       saveActionLog(selectedDossier?.id || 'default', {
         type: 'Saisie',
@@ -372,7 +379,7 @@ export default function Finance() {
         dateOperation: entryForm.dateOperation,
         piece: entryForm.piece,
         libelle: entryForm.libelle,
-        lines: entryLines as any
+        lines: cleanedLines as any
       });
       saveActionLog(selectedDossier?.id || 'default', {
         type: 'Saisie',
@@ -526,6 +533,65 @@ export default function Finance() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const isTiersAccount = (accNum: string) => {
+    if (!accNum) return false;
+    const clean = accNum.trim().replace(/\s/g, '');
+    const prefix2 = clean.substring(0, 2);
+    return ['40', '41', '42', '45', '46', '47', '48'].includes(prefix2);
+  };
+
+  // Automatic balancing logic for Treasury Journals
+  useEffect(() => {
+    if (!isSaisieModalOpen || modalMode === 'view' || !entryForm.journal) return;
+    
+    const activeJournal = journals.find(j => j.code === entryForm.journal);
+    if (!activeJournal || activeJournal.type !== 'Trésorerie' || !activeJournal.account || activeJournal.account === '—') {
+      return;
+    }
+    
+    const tAcc = activeJournal.account.trim().replace(/\s/g, '');
+    if (!tAcc) return;
+    
+    // Sum standard lines
+    const standardLines = entryLines.filter(l => (l.account || '').trim().replace(/\s/g, '') !== tAcc);
+    const sumDebits = standardLines.reduce((acc, l) => acc + (parseFloat(l.debit as any) || 0), 0);
+    const sumCredits = standardLines.reduce((acc, l) => acc + (parseFloat(l.credit as any) || 0), 0);
+    const netDiff = sumDebits - sumCredits;
+    
+    const expectedDebit = netDiff < 0 ? Math.abs(netDiff) : 0;
+    const expectedCredit = netDiff > 0 ? netDiff : 0;
+    
+    // Find if there is already a line for the treasury account
+    const treasuryLineIndex = entryLines.findIndex(l => (l.account || '').trim().replace(/\s/g, '') === tAcc);
+    
+    if (treasuryLineIndex !== -1) {
+      const tLine = entryLines[treasuryLineIndex];
+      const currentDebit = parseFloat(tLine.debit as any) || 0;
+      const currentCredit = parseFloat(tLine.credit as any) || 0;
+      
+      if (Math.abs(currentDebit - expectedDebit) > 0.01 || Math.abs(currentCredit - expectedCredit) > 0.01) {
+        const updatedLines = [...entryLines];
+        updatedLines[treasuryLineIndex] = {
+          ...updatedLines[treasuryLineIndex],
+          debit: expectedDebit,
+          credit: expectedCredit
+        };
+        setEntryLines(updatedLines);
+      }
+    } else if (Math.abs(netDiff) > 0.01) {
+      // Append new treasury counterpart line
+      const newLine = {
+        id: Date.now() + Math.random(),
+        account: tAcc,
+        tiers: '',
+        label: 'Contrepartie automatique Trésorerie',
+        debit: expectedDebit,
+        credit: expectedCredit
+      };
+      setEntryLines([...entryLines, newLine]);
+    }
+  }, [entryLines, entryForm.journal, isSaisieModalOpen, journals, modalMode]);
 
   const userName = activeEnterprise?.name || user?.displayName || user?.email?.split('@')[0] || 'Anonyme';
   const userInitial = userName.charAt(0).toUpperCase();
@@ -2222,7 +2288,9 @@ export default function Finance() {
                                {tx.lines.map((line, lIdx) => (
                                  <div key={lIdx} className="grid grid-cols-5 hover:bg-purple-50/20 transition-colors">
                                     <div className="px-6 py-4 font-black text-slate-600">{line.account}</div>
-                                    <div className="px-6 py-4 font-bold text-slate-400 uppercase tracking-tighter">{line.tiers}</div>
+                                    <div className="px-6 py-4 font-bold text-slate-400 uppercase tracking-tighter">
+                                      {isTiersAccount(line.account) ? line.tiers : ''}
+                                    </div>
                                     <div className="px-6 py-4 text-slate-500 font-medium">{line.label}</div>
                                     <div className="px-6 py-4 text-right tabular-nums font-black text-emerald-600">
                                       {line.debit > 0 ? line.debit.toLocaleString() : ''}
@@ -2438,7 +2506,9 @@ export default function Finance() {
                                {tx.lines.map((line, lIdx) => (
                                  <div key={lIdx} className="grid grid-cols-5 hover:bg-amber-50/20 transition-colors">
                                     <div className="px-6 py-4 font-black text-slate-600">{line.account}</div>
-                                    <div className="px-6 py-4 font-bold text-slate-400 uppercase tracking-tighter">{line.tiers}</div>
+                                    <div className="px-6 py-4 font-bold text-slate-400 uppercase tracking-tighter">
+                                      {isTiersAccount(line.account) ? line.tiers : ''}
+                                    </div>
                                     <div className="px-6 py-4 text-slate-500 font-medium truncate">{line.label}</div>
                                     <div className="px-6 py-4 text-right tabular-nums font-black text-emerald-600">
                                       {line.debit > 0 ? line.debit.toLocaleString() : ''}
@@ -2643,10 +2713,10 @@ export default function Finance() {
                                 <td className="py-4 px-6 font-black text-slate-900 border-r border-slate-50">{entry.piece}</td>
                                 <td className="py-4 px-6 text-slate-500 font-medium border-r border-slate-50">{entry.label}</td>
                                 <td className="py-4 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50">
-                                  {entry.debit > 0 ? entry.debit.toLocaleString() : '—'}
+                                  {entry.debit > 0 ? entry.debit.toLocaleString() : ''}
                                 </td>
                                 <td className="py-4 px-6 text-right tabular-nums font-black text-rose-500">
-                                  {entry.credit > 0 ? entry.credit.toLocaleString() : '—'}
+                                  {entry.credit > 0 ? entry.credit.toLocaleString() : ''}
                                 </td>
                              </tr>
                            ))}
@@ -2859,10 +2929,10 @@ export default function Finance() {
                                 <td className="py-4 px-6 font-black text-slate-900 border-r border-slate-50">{entry.piece}</td>
                                 <td className="py-4 px-6 text-slate-500 font-medium border-r border-slate-50">{entry.label}</td>
                                 <td className="py-4 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50">
-                                  {entry.debit > 0 ? entry.debit.toLocaleString() : '—'}
+                                  {entry.debit > 0 ? entry.debit.toLocaleString() : ''}
                                 </td>
                                 <td className="py-4 px-6 text-right tabular-nums font-black text-rose-500">
-                                  {entry.credit > 0 ? entry.credit.toLocaleString() : '—'}
+                                  {entry.credit > 0 ? entry.credit.toLocaleString() : ''}
                                 </td>
                              </tr>
                            ))}
@@ -3100,41 +3170,41 @@ export default function Finance() {
                         {/* Rendering cells based on column layout */}
                         {balanceParams.type === '8 Colonnes' && (
                            <>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvD > 0 ? row.ouvD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvC > 0 ? row.ouvC.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtD > 0 ? row.mvtD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtC > 0 ? row.mvtC.toLocaleString() : '—'}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvD > 0 ? row.ouvD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvC > 0 ? row.ouvC.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtD > 0 ? row.mvtD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtC > 0 ? row.mvtC.toLocaleString() : ''}</td>
                             <td className="py-3.5 px-6 text-right tabular-nums text-slate-900 border-r border-slate-50">{(row.ouvD + row.mvtD).toLocaleString()}</td>
                             <td className="py-3.5 px-6 text-right tabular-nums text-slate-900 border-r border-slate-50">{(row.ouvC + row.mvtC).toLocaleString()}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50 bg-emerald-50/10">{row.soldeD > 0 ? row.soldeD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600 bg-rose-50/10">{row.soldeC > 0 ? row.soldeC.toLocaleString() : '—'}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50 bg-emerald-50/10">{row.soldeD > 0 ? row.soldeD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600 bg-rose-50/10">{row.soldeC > 0 ? row.soldeC.toLocaleString() : ''}</td>
                            </>
                         )}
 
                         {balanceParams.type === '6 Colonnes' && (
                            <>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvD > 0 ? row.ouvD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvC > 0 ? row.ouvC.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtD > 0 ? row.mvtD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtC > 0 ? row.mvtC.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50 bg-emerald-50/10">{row.soldeD > 0 ? row.soldeD.toLocaleString() : '—'}</td>
-                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600 bg-rose-50/10">{row.soldeC > 0 ? row.soldeC.toLocaleString() : '—'}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvD > 0 ? row.ouvD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-400 border-r border-slate-50">{row.ouvC > 0 ? row.ouvC.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtD > 0 ? row.mvtD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">{row.mvtC > 0 ? row.mvtC.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50 bg-emerald-50/10">{row.soldeD > 0 ? row.soldeD.toLocaleString() : ''}</td>
+                            <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600 bg-rose-50/10">{row.soldeC > 0 ? row.soldeC.toLocaleString() : ''}</td>
                            </>
                         )}
 
                         {balanceParams.type === '4 Colonnes' && (
                            <>
                             <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">
-                              {row.mvtD > 0 ? row.mvtD.toLocaleString() : '—'}
+                              {row.mvtD > 0 ? row.mvtD.toLocaleString() : ''}
                             </td>
                             <td className="py-3.5 px-6 text-right tabular-nums text-slate-600 border-r border-slate-50">
-                              {row.mvtC > 0 ? row.mvtC.toLocaleString() : '—'}
+                              {row.mvtC > 0 ? row.mvtC.toLocaleString() : ''}
                             </td>
                             <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50 bg-emerald-50/10">
-                              {row.soldeD > 0 ? row.soldeD.toLocaleString() : '—'}
+                              {row.soldeD > 0 ? row.soldeD.toLocaleString() : ''}
                             </td>
                             <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600 bg-rose-50/10">
-                              {row.soldeC > 0 ? row.soldeC.toLocaleString() : '—'}
+                              {row.soldeC > 0 ? row.soldeC.toLocaleString() : ''}
                             </td>
                            </>
                         )}
@@ -3142,10 +3212,10 @@ export default function Finance() {
                         {balanceParams.type === '2 Colonnes' && (
                            <>
                             <td className="py-3.5 px-6 text-right tabular-nums font-black text-emerald-600 border-r border-slate-50">
-                              {row.soldeD > 0 ? row.soldeD.toLocaleString() : '—'}
+                              {row.soldeD > 0 ? row.soldeD.toLocaleString() : ''}
                             </td>
                             <td className="py-3.5 px-6 text-right tabular-nums font-black text-rose-600">
-                              {row.soldeC > 0 ? row.soldeC.toLocaleString() : '—'}
+                              {row.soldeC > 0 ? row.soldeC.toLocaleString() : ''}
                             </td>
                            </>
                         )}
@@ -3452,10 +3522,14 @@ export default function Finance() {
                              value={line.account || ''}
                              onChange={(e) => {
                                const newLines = [...entryLines];
-                               newLines[idx].account = e.target.value;
+                               const val = e.target.value;
+                               newLines[idx].account = val;
+                               if (!isTiersAccount(val)) {
+                                 newLines[idx].tiers = '';
+                               }
                                setEntryLines(newLines);
                                setActiveLineSearch({ idx, type: 'account' });
-                               setSearchValue(e.target.value);
+                               setSearchValue(val);
                              }}
                              disabled={modalMode === 'view'}
                            />
@@ -3474,6 +3548,9 @@ export default function Finance() {
                                         if (!newLines[idx].label) {
                                           newLines[idx].label = a.label;
                                         }
+                                        if (!isTiersAccount(a.num)) {
+                                          newLines[idx].tiers = '';
+                                        }
                                         setEntryLines(newLines);
                                         setActiveLineSearch(null);
                                       }}
@@ -3489,41 +3566,50 @@ export default function Finance() {
                            )}
                         </td>
                         <td className="py-2 px-2 relative min-w-[150px]">
-                           <input 
-                             type="text" 
-                             className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg px-3 text-[13px] outline-none focus:border-[#4A9EC9] transition-all"
-                             placeholder="Saisir un tiers"
-                             value={line.tiers || ''}
-                             onChange={(e) => {
-                               const newLines = [...entryLines];
-                               newLines[idx].tiers = e.target.value;
-                               setEntryLines(newLines);
-                               setActiveLineSearch({ idx, type: 'tiers' });
-                               setSearchValue(e.target.value);
-                             }}
-                             disabled={modalMode === 'view'}
-                           />
-                           {activeLineSearch?.idx === idx && activeLineSearch.type === 'tiers' && searchValue.length > 0 && (
-                             <div className="absolute left-2 right-2 top-11 z-[60] bg-white border border-slate-200 rounded-xl shadow-2xl p-2 max-h-48 overflow-y-auto">
-                                {thirdParties.filter(pt => !searchValue || pt.code.toLowerCase().includes(searchValue.toLowerCase()) || pt.label.toLowerCase().includes(searchValue.toLowerCase())).slice(0, 8).map(t => (
-                                  <button 
-                                    key={t.id}
-                                    onClick={() => {
-                                      const newLines = [...entryLines];
-                                      newLines[idx].tiers = t.code;
-                                      newLines[idx].account = t.rattachement;
-                                      if (!newLines[idx].label) {
-                                        newLines[idx].label = t.label;
-                                      }
-                                      setEntryLines(newLines);
-                                      setActiveLineSearch(null);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-xs hover:bg-[#F0F9FF] hover:text-[#4A9EC9] rounded-lg font-medium border-b border-slate-50 last:border-0"
-                                  >
-                                    {t.code} — {t.label} (Ratt.: {t.rattachement})
-                                  </button>
-                                ))}
+                           {!isTiersAccount(line.account) ? (
+                             <div className="w-full h-10 flex items-center px-3 text-slate-300 font-mono text-[13px] bg-slate-100/30 rounded-lg select-none">
+                               
                              </div>
+                           ) : (
+                             <>
+                               <input 
+                                 type="text" 
+                                 className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg px-3 text-[13px] outline-none focus:border-[#4A9EC9] transition-all"
+                                 placeholder="Saisir un tiers"
+                                 value={line.tiers || ''}
+                                 onChange={(e) => {
+                                   const newLines = [...entryLines];
+                                   newLines[idx].tiers = e.target.value;
+                                   setEntryLines(newLines);
+                                   setActiveLineSearch({ idx, type: 'tiers' });
+                                   setSearchValue(e.target.value);
+                                 }}
+                                 disabled={modalMode === 'view'}
+                               />
+                               {activeLineSearch?.idx === idx && activeLineSearch.type === 'tiers' && searchValue.length > 0 && (
+                                 <div className="absolute left-2 right-2 top-11 z-[60] bg-white border border-slate-200 rounded-xl shadow-2xl p-2 max-h-48 overflow-y-auto">
+                                   {thirdParties.filter(pt => !searchValue || pt.code.toLowerCase().includes(searchValue.toLowerCase()) || pt.label.toLowerCase().includes(searchValue.toLowerCase())).slice(0, 8).map(t => (
+                                     <button 
+                                       key={t.id}
+                                       type="button"
+                                       onClick={() => {
+                                         const newLines = [...entryLines];
+                                         newLines[idx].tiers = t.code;
+                                         newLines[idx].account = t.rattachement || '401100';
+                                         if (!newLines[idx].label) {
+                                           newLines[idx].label = t.label;
+                                         }
+                                         setEntryLines(newLines);
+                                         setActiveLineSearch(null);
+                                       }}
+                                       className="w-full text-left px-3 py-2 text-xs hover:bg-[#F0F9FF] hover:text-[#4A9EC9] rounded-lg font-medium border-b border-slate-50 last:border-0 cursor-pointer"
+                                     >
+                                       {t.code} — {t.label} (Ratt.: {t.rattachement})
+                                     </button>
+                                   ))}
+                                 </div>
+                               )}
+                             </>
                            )}
                         </td>
                         <td className="py-2 px-2">
@@ -3805,8 +3891,8 @@ function EntryRow({ date, journal, type, label, debit, credit }: any) {
         </span>
       </td>
       <td className="py-4 px-4 font-medium text-slate-700">{label}</td>
-      <td className="py-4 px-4 text-right font-bold text-slate-900">{debit || <span className="text-slate-300 font-normal">—</span>}</td>
-      <td className="py-4 px-4 text-right font-bold text-slate-900">{credit || <span className="text-slate-300 font-normal">—</span>}</td>
+      <td className="py-4 px-4 text-right font-bold text-slate-900">{debit || ''}</td>
+      <td className="py-4 px-4 text-right font-bold text-slate-900">{credit || ''}</td>
     </tr>
   );
 }
@@ -4034,17 +4120,17 @@ function TiersRow({ idx, code, label, phone, email, rattachement, onView, onEdit
       <td className="py-4 px-4 text-center text-slate-300 font-mono text-[10px]">{idx}</td>
       <td className="py-4 px-4 font-mono font-bold text-slate-900 group-hover:text-brand">{code}</td>
       <td className="py-4 px-4 font-medium text-slate-700">{label}</td>
-      <td className="py-4 px-4 font-mono font-bold text-[#4A9EC9]">{rattachement || '—'}</td>
+      <td className="py-4 px-4 font-mono font-bold text-[#4A9EC9]">{rattachement || ''}</td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2 text-slate-500 font-medium">
           <Phone className="w-3 h-3 text-slate-300" />
-          {phone || '—'}
+          {phone || ''}
         </div>
       </td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2 text-slate-500 font-medium">
           <Mail className="w-3 h-3 text-slate-300" />
-          {email || '—'}
+          {email || ''}
         </div>
       </td>
       <td className="py-4 px-4 text-right">

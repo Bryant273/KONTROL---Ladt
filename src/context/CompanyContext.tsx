@@ -241,7 +241,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       const defaultEntries: JournalEntry[] = [
         {
           id: `${selectedDossier.id}-ent-1`,
-          numSaisie: 'S-0001',
+          numSaisie: 'ACH-260516-1',
           journal: 'ACH',
           dateSaisie: '16/05/2026',
           dateOperation: '16/05/2026',
@@ -254,7 +254,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         },
         {
           id: `${selectedDossier.id}-ent-2`,
-          numSaisie: 'S-0002',
+          numSaisie: 'VTE-260515-1',
           journal: 'VTE',
           dateSaisie: '15/05/2026',
           dateOperation: '15/05/2026',
@@ -267,7 +267,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         },
         {
           id: `${selectedDossier.id}-ent-3`,
-          numSaisie: 'S-0003',
+          numSaisie: 'BQ-260515-1',
           journal: 'BQ',
           dateSaisie: '15/05/2026',
           dateOperation: '15/05/2026',
@@ -383,16 +383,65 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Saisie Entry Mutations
+  const getFormattedDatePart = (dateStr: string): string => {
+    if (!dateStr) {
+      const d = new Date();
+      const yy = d.getFullYear().toString().substring(2);
+      const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+      const dd = d.getDate().toString().padStart(2, '0');
+      return `${yy}${mm}${dd}`;
+    }
+    const parts = dateStr.split(/[-/]/);
+    if (parts.length === 3) {
+      const p0 = parts[0].trim();
+      const p1 = parts[1].trim();
+      const p2 = parts[2].trim();
+      
+      let yy = '';
+      let mm = p1.padStart(2, '0');
+      let dd = '';
+
+      if (p0.length === 4) { // ISO: YYYY-MM-DD
+        yy = p0.substring(2);
+        dd = p2.padStart(2, '0');
+      } else if (p2.length === 4) { // FR: DD/MM/YYYY
+        yy = p2.substring(2);
+        dd = p0.padStart(2, '0');
+      } else {
+        yy = p2.substring(Math.max(0, p2.length - 2));
+        dd = p0.padStart(2, '0');
+      }
+      return `${yy}${mm}${dd}`;
+    }
+    
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const yy = d.getFullYear().toString().substring(2);
+        const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dd = d.getDate().toString().padStart(2, '0');
+        return `${yy}${mm}${dd}`;
+      }
+    } catch (e) {}
+    
+    const d = new Date();
+    const yy = d.getFullYear().toString().substring(2);
+    const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+    const dd = d.getDate().toString().padStart(2, '0');
+    return `${yy}${mm}${dd}`;
+  };
+
   const addEntry = (entry: Omit<JournalEntry, 'id' | 'numSaisie'>) => {
     if (!selectedDossier) return;
     const entriesKey = `entries-${selectedDossier.id}`;
     
-    // Generate sequential number composed of Journal + Year + 5-digit sequence (e.g., ACH-2026-00001)
-    const entryYear = entry.dateOperation ? entry.dateOperation.substring(0, 4) : new Date().getFullYear().toString();
-    const journalMatches = entries.filter(e => e.journal === entry.journal && e.dateOperation.startsWith(entryYear));
+    // Generate sequential number in JOU-AAMMJJ-N format (e.g., ACH-260516-1)
+    const datePart = getFormattedDatePart(entry.dateOperation);
+    const journalMatches = entries.filter(e => {
+      return e.journal === entry.journal && getFormattedDatePart(e.dateOperation) === datePart;
+    });
     const nextSeq = journalMatches.length + 1;
-    const seqStr = nextSeq.toString().padStart(5, '0');
-    const numSaisie = `${entry.journal || 'G'}-${entryYear}-${seqStr}`;
+    const numSaisie = `${entry.journal || 'G'}-${datePart}-${nextSeq}`;
 
     const newEntryItem: JournalEntry = {
       ...entry,
