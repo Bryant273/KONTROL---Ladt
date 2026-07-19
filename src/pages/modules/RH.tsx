@@ -36,9 +36,37 @@ import {
   Contact,
   Briefcase,
   TrendingUp,
-  Folder
+  Folder,
+  Calendar,
+  Settings,
+  Coins,
+  Sliders,
+  BookOpen
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+
+// Import newly created sub-views
+import { 
+  EmployeesView, 
+  ContractsView, 
+  FoldersView 
+} from './rh/PersonnelViews';
+import { 
+  AbsencesView, 
+  PointageView 
+} from './rh/PresencesViews';
+import { 
+  PayrollSettingsView, 
+  BulletinsView, 
+  PayrollLedgerView, 
+  CotisationsView 
+} from './rh/PaieViews';
+import { 
+  RubriquesView, 
+  BulletinsModelesView,
+  ContratsModelesView
+} from './rh/ParametrageViews';
+import { NewEmployeeView } from './rh/NewEmployeeView';
 
 type Module = 'tdb' | 'skom' | 'rh' | 'logistics' | 'marketing';
 
@@ -46,7 +74,7 @@ export default function RH() {
   const { user } = useAuth();
   const { activeEnterprise, selectedDossier, dossiers, setSelectedDossier } = useCompany();
   const [activePage, setActivePage] = useState<string>('rh-tdb');
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['personnel', 'presences', 'parametrage', 'paie', 'etats']));
   const navigate = useNavigate();
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -70,6 +98,8 @@ export default function RH() {
   };
 
   const renderContent = () => {
+    const selectedDossierId = selectedDossier?.id || null;
+
     switch (activePage) {
       case 'rh-tdb':
         return (
@@ -79,8 +109,11 @@ export default function RH() {
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">Tableau de bord</h2>
                 <p className="text-xs text-slate-400">Gestion des Ressources Humaines — Mai 2026</p>
               </div>
-              <button className="bg-[#111] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-90 cursor-pointer">
-                <UserPlus className="w-4 h-4" /> Nouvel employé
+              <button 
+                onClick={() => setActivePage('new-employee')}
+                className="bg-[#111] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-90 cursor-pointer border-0"
+              >
+                <UserPlus className="w-4 h-4" /> Nouvel Employé
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -109,6 +142,41 @@ export default function RH() {
             </div>
           </div>
         );
+
+      // Personnel Views
+      case 'employees':
+        return <EmployeesView selectedDossierId={selectedDossierId} onNavigateToCreate={() => setActivePage('new-employee')} />;
+      case 'new-employee':
+        return <NewEmployeeView selectedDossierId={selectedDossierId} onBack={() => setActivePage('employees')} />;
+      case 'contracts':
+        return <ContractsView selectedDossierId={selectedDossierId} />;
+      case 'dossiers':
+        return <FoldersView selectedDossierId={selectedDossierId} />;
+
+      // Presences Views
+      case 'absences':
+        return <AbsencesView selectedDossierId={selectedDossierId} />;
+      case 'pointage':
+        return <PointageView selectedDossierId={selectedDossierId} />;
+
+      // Parametrage Views
+      case 'rubriques':
+        return <RubriquesView selectedDossierId={selectedDossierId} />;
+      case 'modeles':
+        return <BulletinsModelesView selectedDossierId={selectedDossierId} />;
+      case 'contrats-modeles':
+        return <ContratsModelesView selectedDossierId={selectedDossierId} />;
+
+      // Paie Views
+      case 'payroll-settings':
+        return <PayrollSettingsView selectedDossierId={selectedDossierId} />;
+      case 'payroll-bulletins':
+        return <BulletinsView selectedDossierId={selectedDossierId} />;
+      case 'payroll-ledger':
+        return <PayrollLedgerView selectedDossierId={selectedDossierId} />;
+      case 'payroll-cotisations':
+        return <CotisationsView selectedDossierId={selectedDossierId} />;
+
       default:
         return (
           <div className="h-64 flex items-center justify-center text-slate-400 text-sm font-medium animate-pulse">
@@ -244,7 +312,7 @@ export default function RH() {
       <div className="flex flex-1 overflow-hidden">
         {/* SIDEBAR */}
         <motion.nav 
-          initial={{ width: 228 }}
+          initial={{ width: 240 }}
           className="bg-white border-r border-black/5 flex flex-col py-3 overflow-y-auto shrink-0 scrollbar-hide"
         >
           <SidebarLink 
@@ -255,13 +323,32 @@ export default function RH() {
           />
 
           <SidebarSection 
-            label="Personnal" 
+            label="Personnel" 
             isOpen={openSections.has('personnel')} 
             onToggle={() => toggleSection('personnel')}
           >
-            <SidebarLink icon={Users} label="Salariés" active={activePage === 'employees'} onClick={() => setActivePage('employees')} />
-            <SidebarLink icon={FileText} label="Contrats" active={activePage === 'contracts'} onClick={() => setActivePage('contracts')} />
-            <SidebarLink icon={History} label="Absences" active={activePage === 'absences'} onClick={() => setActivePage('absences')} />
+            <SidebarLink icon={Users} label="Employés" active={activePage === 'employees'} onClick={() => setActivePage('employees')} />
+            <SidebarLink icon={Briefcase} label="Contrats" active={activePage === 'contracts'} onClick={() => setActivePage('contracts')} />
+            <SidebarLink icon={Folder} label="Dossiers" active={activePage === 'dossiers'} onClick={() => setActivePage('dossiers')} />
+          </SidebarSection>
+
+          <SidebarSection 
+            label="Présences" 
+            isOpen={openSections.has('presences')} 
+            onToggle={() => toggleSection('presences')}
+          >
+            <SidebarLink icon={Calendar} label="Congés & absences" active={activePage === 'absences'} onClick={() => setActivePage('absences')} />
+            <SidebarLink icon={Clock} label="Pointage" active={activePage === 'pointage'} onClick={() => setActivePage('pointage')} />
+          </SidebarSection>
+
+          <SidebarSection 
+            label="Paramétrage" 
+            isOpen={openSections.has('parametrage')} 
+            onToggle={() => toggleSection('parametrage')}
+          >
+            <SidebarLink icon={Sliders} label="Rubriques" active={activePage === 'rubriques'} onClick={() => setActivePage('rubriques')} />
+            <SidebarLink icon={BookText} label="Bulletins modèles" active={activePage === 'modeles'} onClick={() => setActivePage('modeles')} />
+            <SidebarLink icon={BookOpen} label="Modèles de contrats" active={activePage === 'contrats-modeles'} onClick={() => setActivePage('contrats-modeles')} />
           </SidebarSection>
 
           <SidebarSection 
@@ -269,8 +356,17 @@ export default function RH() {
             isOpen={openSections.has('paie')} 
             onToggle={() => toggleSection('paie')}
           >
-            <SidebarLink icon={Receipt} label="Bulletins" active={activePage === 'payroll'} onClick={() => setActivePage('payroll')} />
-            <SidebarLink icon={Files} label="Déclarations" active={activePage === 'reports'} onClick={() => setActivePage('reports')} />
+            <SidebarLink icon={Settings} label="Paramétrage de la paie" active={activePage === 'payroll-settings'} onClick={() => setActivePage('payroll-settings')} />
+            <SidebarLink icon={Receipt} label="Bulletins" active={activePage === 'payroll-bulletins'} onClick={() => setActivePage('payroll-bulletins')} />
+          </SidebarSection>
+
+          <SidebarSection 
+            label="États de paie" 
+            isOpen={openSections.has('etats')} 
+            onToggle={() => toggleSection('etats')}
+          >
+            <SidebarLink icon={FileText} label="Livres de paie" active={activePage === 'payroll-ledger'} onClick={() => setActivePage('payroll-ledger')} />
+            <SidebarLink icon={Coins} label="Résumés de cotisations" active={activePage === 'payroll-cotisations'} onClick={() => setActivePage('payroll-cotisations')} />
           </SidebarSection>
         </motion.nav>
 
