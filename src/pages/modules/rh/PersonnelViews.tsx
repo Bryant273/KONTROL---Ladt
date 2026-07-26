@@ -22,10 +22,20 @@ import {
   Mail,
   Phone,
   Shield,
-  Eye
+  Eye,
+  Upload,
+  CheckCircle2,
+  FileUp,
+  Award,
+  CreditCard,
+  Printer,
+  X
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { saveActionLog } from '../../../lib/auditLogger';
+import { EmployeeA4SheetModal } from '../../../components/modals/EmployeeA4SheetModal';
+import { useCompany } from '../../../context/CompanyContext';
+import { generateSmartContractText } from '../../../lib/contractGenerator';
 
 // Interfaces
 export interface Employee {
@@ -57,7 +67,7 @@ export interface HrFolder {
   id: string;
   employeeId: string;
   employeeName: string;
-  folderType: 'Médical' | 'Identité' | 'Diplômes' | 'Contrats Signés' | 'Disciplinaire';
+  folderType: 'Médical' | 'Identité & CMU' | 'RIB & Banques' | 'Permis de conduire' | 'Diplômes & Certifications' | 'Contrats Signés' | 'Attestations & Justificatifs' | 'Disciplinaire' | string;
   documentCount: number;
   lastUpdated: string;
   status: 'Complet' | 'Incomplet';
@@ -449,62 +459,12 @@ export function EmployeesView({ selectedDossierId, onNavigateToCreate }: ViewPro
         </div>
       )}
 
-      {/* DETAIL DRAWER / MODAL */}
+      {/* DETAIL A4 SHEET MODAL */}
       {selectedEmp && (
-        <div className="fixed inset-0 bg-[#09090b]/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-[2rem] border border-slate-150 shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#4A9EC9] flex items-center justify-center text-sm font-black uppercase">
-                  {selectedEmp.name.substring(0, 2)}
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{selectedEmp.name}</h3>
-                  <p className="text-[9px] font-black text-slate-400 tracking-wider uppercase mt-0.5">{selectedEmp.matricule}</p>
-                </div>
-              </div>
-              <button onClick={() => setSelectedEmp(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 border-0 cursor-pointer">✕</button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-xs">
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Département</p>
-                  <p className="font-bold text-slate-800 mt-0.5">{selectedEmp.department}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Poste</p>
-                  <p className="font-bold text-slate-800 mt-0.5">{selectedEmp.position}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date d'embauche</p>
-                  <p className="font-bold text-slate-800 mt-0.5">{new Date(selectedEmp.hireDate).toLocaleDateString('fr-FR')}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Salaire de Base Brut</p>
-                  <p className="font-black text-slate-900 mt-0.5">{selectedEmp.salary.toLocaleString()} FCFA</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">E-mail</p>
-                  <p className="font-bold text-slate-700 mt-0.5">{selectedEmp.email}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Téléphone</p>
-                  <p className="font-bold text-slate-700 mt-0.5">{selectedEmp.phone}</p>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-100 pt-4 flex justify-end">
-                <button 
-                  onClick={() => setSelectedEmp(null)}
-                  className="w-full h-11 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-850 border-0 cursor-pointer"
-                >
-                  Fermer la fiche
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmployeeA4SheetModal 
+          data={selectedEmp} 
+          onClose={() => setSelectedEmp(null)} 
+        />
       )}
     </div>
   );
@@ -516,6 +476,17 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedContractForView, setSelectedContractForView] = useState<Contract | null>(null);
+  const [selectedContractForEdit, setSelectedContractForEdit] = useState<Contract | null>(null);
+
+  // Load active enterprise for company logo and details
+  let activeEnterprise = null;
+  try {
+    const compCtx = useCompany();
+    activeEnterprise = compCtx?.activeEnterprise || null;
+  } catch (e) {
+    // Context fallback
+  }
 
   const [form, setForm] = useState({
     employeeId: '',
@@ -526,12 +497,33 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
     salary: 400000
   });
 
+  const [editForm, setEditForm] = useState({
+    type: 'CDI' as 'CDI' | 'CDD' | 'Stage' | 'Consultant',
+    startDate: new Date().toISOString().substring(0, 10),
+    endDate: '',
+    trialPeriod: '3 mois',
+    salary: 400000,
+    status: 'Actif' as 'Actif' | 'Expiré' | 'Suspendu'
+  });
+
+  // State for View Contract Modal
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [contractTemplates, setContractTemplates] = useState<any[]>([]);
+  const [contractText, setContractText] = useState<string>('');
+
   useEffect(() => {
     // Load Employees to bind in drop-down list
     const empKey = `employees_${selectedDossierId || 'default'}`;
     const savedEmps = localStorage.getItem(empKey);
     if (savedEmps) {
       setEmployees(JSON.parse(savedEmps));
+    }
+
+    // Load templates
+    const tplKey = `contract_templates_${selectedDossierId || 'default'}`;
+    const savedTpls = localStorage.getItem(tplKey);
+    if (savedTpls) {
+      setContractTemplates(JSON.parse(savedTpls));
     }
 
     const key = `contracts_${selectedDossierId || 'default'}`;
@@ -599,17 +591,69 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
     });
   };
 
-  const handleDelete = (id: string, empName: string) => {
-    if (confirm(`Confirmez-vous la rupture ou la suppression du contrat de ${empName} ?`)) {
-      const updated = contracts.filter(c => c.id !== id);
-      saveContracts(updated);
-      if (selectedDossierId) {
-        saveActionLog(selectedDossierId, {
-          type: 'Rupture',
-          desc: "Rupture de contrat",
-          details: `Contrat supprimé pour ${empName}`
-        });
+  const handleOpenViewContract = (contract: Contract) => {
+    setSelectedContractForView(contract);
+    const empObj = employees.find(e => e.id === contract.employeeId);
+    
+    // Check if there is a saved template matching contract type or first available
+    const matchingTpl = contractTemplates.find(t => t.type === contract.type) || contractTemplates[0];
+    const tplContent = matchingTpl ? matchingTpl.content : undefined;
+    if (matchingTpl) {
+      setSelectedTemplateId(matchingTpl.id);
+    } else {
+      setSelectedTemplateId('');
+    }
+
+    const smartText = generateSmartContractText({
+      employee: empObj,
+      contract: contract,
+      enterprise: activeEnterprise,
+      templateContent: tplContent
+    });
+
+    setContractText(smartText);
+  };
+
+  const handleOpenEditContract = (contract: Contract) => {
+    setSelectedContractForEdit(contract);
+    setEditForm({
+      type: contract.type,
+      startDate: contract.startDate,
+      endDate: contract.endDate || '',
+      trialPeriod: contract.trialPeriod || '3 mois',
+      salary: contract.salary,
+      status: contract.status || 'Actif'
+    });
+  };
+
+  const handleSaveEditedContract = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedContractForEdit) return;
+
+    const updated = contracts.map(c => {
+      if (c.id === selectedContractForEdit.id) {
+        return {
+          ...c,
+          type: editForm.type,
+          startDate: editForm.startDate,
+          endDate: editForm.endDate || undefined,
+          trialPeriod: editForm.trialPeriod,
+          salary: Number(editForm.salary),
+          status: editForm.status
+        };
       }
+      return c;
+    });
+
+    saveContracts(updated);
+    setSelectedContractForEdit(null);
+
+    if (selectedDossierId) {
+      saveActionLog(selectedDossierId, {
+        type: 'Modification',
+        desc: 'Contrat de travail modifié',
+        details: `Mise à jour des termes du contrat de ${selectedContractForEdit.employeeName}`
+      });
     }
   };
 
@@ -690,17 +734,26 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
                   </td>
                   <td className="py-4 px-4 text-center">
                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-emerald-600 tracking-wider">
-                      <CheckCircle className="w-3.5 h-3.5" /> Actif
+                      <CheckCircle className="w-3.5 h-3.5" /> {con.status || 'Actif'}
                     </span>
                   </td>
                   <td className="py-4 px-4 text-right">
-                    <button 
-                      onClick={() => handleDelete(con.id, con.employeeName)}
-                      className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors border-0 cursor-pointer"
-                      title="Supprimer / Rompre"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button 
+                        onClick={() => handleOpenViewContract(con)}
+                        className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#4A9EC9] rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border-0 cursor-pointer transition-colors shadow-xs"
+                        title="Voir le contrat de travail"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Voir
+                      </button>
+                      <button 
+                        onClick={() => handleOpenEditContract(con)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border-0 cursor-pointer transition-colors shadow-xs"
+                        title="Modifier le contrat"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Modifier
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -715,6 +768,242 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
           </table>
         </div>
       </div>
+
+      {/* VIEW CONTRACT MODAL */}
+      {selectedContractForView && (() => {
+        const empObj = employees.find(e => e.id === selectedContractForView.employeeId);
+        return (
+          <div className="fixed inset-0 bg-[#09090b]/60 backdrop-blur-md flex items-center justify-center z-[120] p-4 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
+            <div className="bg-white rounded-[2rem] border border-slate-150 shadow-2xl w-full max-w-4xl overflow-hidden my-auto flex flex-col max-h-[92vh] print:max-h-none print:border-none print:shadow-none print:rounded-none">
+              
+              {/* Control Header */}
+              <div className="p-5 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+                <div className="flex items-center gap-3">
+                  {activeEnterprise?.logo ? (
+                    <img src={activeEnterprise.logo} alt="Logo" className="h-9 max-w-[140px] object-contain" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-[#4A9EC9] text-white flex items-center justify-center font-black">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-tight text-white">
+                      Contrat de travail : {selectedContractForView.employeeName}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Type : {selectedContractForView.type} • Matricule : {empObj?.matricule || 'N/A'} • {activeEnterprise?.name || 'SOCIX GROUP S.A.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setTimeout(() => window.print(), 150);
+                    }}
+                    className="px-4 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-0 cursor-pointer shadow-md transition-all"
+                  >
+                    <Printer className="w-4 h-4" /> Imprimer le contrat A4
+                  </button>
+                  <button
+                    onClick={() => setSelectedContractForView(null)}
+                    className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 border-0 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Template selection & info header */}
+              <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gabarit Modèle :</span>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => {
+                      const tplId = e.target.value;
+                      setSelectedTemplateId(tplId);
+                      const tpl = contractTemplates.find(t => t.id === tplId);
+                      const newText = generateSmartContractText({
+                        employee: empObj,
+                        contract: selectedContractForView,
+                        enterprise: activeEnterprise,
+                        templateContent: tpl?.content
+                      });
+                      setContractText(newText);
+                    }}
+                    className="h-8 px-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#4A9EC9]"
+                  >
+                    <option value="">Intelligent par défaut ({selectedContractForView.type})</option>
+                    {contractTemplates.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.title} ({t.type})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                  ✓ Variables collaborateur & entreprise fusionnées automatiquement
+                </span>
+              </div>
+
+              {/* Printable / Editable Contract Content Area */}
+              <div className="p-6 sm:p-8 overflow-y-auto space-y-4 print:p-8">
+                {/* Print header visible on print */}
+                <div className="hidden print:flex items-center justify-between border-b-2 border-slate-900 pb-4 mb-6">
+                  <div>
+                    <h2 className="text-base font-black uppercase text-slate-900">{activeEnterprise?.name || 'SOCIX GROUP S.A.'}</h2>
+                    <p className="text-[9px] font-bold text-slate-500">N° NCC: {activeEnterprise?.ncc || '1234567 A'} • N° CNPS: {activeEnterprise?.cnps || '98765'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-mono font-black text-slate-700">RÉF : CONTRAT/{selectedContractForView.type}/{selectedContractForView.id}</p>
+                    <p className="text-[8px] text-slate-400 font-bold">ÉDITION DU : {new Date().toLocaleDateString('fr-FR')}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block print:hidden">
+                    Contenu rédigé du contrat (Modifiable) :
+                  </label>
+                  <textarea
+                    value={contractText}
+                    onChange={(e) => setContractText(e.target.value)}
+                    rows={18}
+                    className="w-full p-6 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono text-slate-800 leading-relaxed outline-none focus:border-[#4A9EC9] print:bg-white print:border-none print:p-0 print:text-sm print:leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0 print:hidden">
+                <p className="text-[10px] text-slate-400 font-medium">
+                  Document conforme à la législation du travail et aux modèles de contrat configurés.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedContractForView(null)}
+                  className="px-5 h-9 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest border-0 cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* EDIT CONTRACT MODAL */}
+      {selectedContractForEdit && (
+        <div className="fixed inset-0 bg-[#09090b]/40 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
+          <div className="bg-white rounded-[2rem] border border-slate-150 shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Modifier le contrat de travail</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                  Salarié : {selectedContractForEdit.employeeName}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedContractForEdit(null)} 
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 border-0 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedContract} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Type de contrat</label>
+                  <select 
+                    value={editForm.type}
+                    onChange={e => setEditForm({...editForm, type: e.target.value as any})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9] cursor-pointer"
+                  >
+                    <option value="CDI">CDI (Indéterminé)</option>
+                    <option value="CDD">CDD (Déterminé)</option>
+                    <option value="Stage">Stage</option>
+                    <option value="Consultant">Prestation / Consultant</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Période d'essai</label>
+                  <input 
+                    type="text" 
+                    value={editForm.trialPeriod}
+                    onChange={e => setEditForm({...editForm, trialPeriod: e.target.value})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date de début *</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={editForm.startDate}
+                    onChange={e => setEditForm({...editForm, startDate: e.target.value})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date de fin</label>
+                  <input 
+                    type="date" 
+                    value={editForm.endDate}
+                    onChange={e => setEditForm({...editForm, endDate: e.target.value})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Salaire Brut (FCFA) *</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={editForm.salary}
+                    onChange={e => setEditForm({...editForm, salary: Number(e.target.value)})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Statut du contrat</label>
+                  <select 
+                    value={editForm.status}
+                    onChange={e => setEditForm({...editForm, status: e.target.value as any})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9] cursor-pointer"
+                  >
+                    <option value="Actif">Actif</option>
+                    <option value="Expiré">Expiré</option>
+                    <option value="Suspendu">Suspendu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="submit"
+                  className="flex-1 h-11 bg-[#4A9EC9] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-95 shadow-lg border-0 cursor-pointer"
+                >
+                  Enregistrer les modifications
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setSelectedContractForEdit(null)}
+                  className="px-5 h-11 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 border-0 cursor-pointer"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CREATE CONTRACT MODAL */}
       {isModalOpen && (
@@ -841,13 +1130,14 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
   const [employees, setEmployees] = useState<any[]>([]);
 
   const [selectedFolder, setSelectedFolder] = useState<HrFolder | null>(null);
+  const [viewA4Employee, setViewA4Employee] = useState<Employee | null>(null);
   const [selectedContractTemplate, setSelectedContractTemplate] = useState<string>('');
   const [generatedContractText, setGeneratedContractText] = useState<string>('');
   const [contractTemplates, setContractTemplates] = useState<any[]>([]);
 
   const [form, setForm] = useState({
     employeeId: '',
-    folderType: 'Identité' as 'Médical' | 'Identité' | 'Diplômes' | 'Contrats Signés' | 'Disciplinaire',
+    folderType: 'Identité & CMU',
     status: 'Complet' as 'Complet' | 'Incomplet'
   });
 
@@ -872,10 +1162,12 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
       setFolders(JSON.parse(saved));
     } else {
       const defaultFolders: HrFolder[] = [
-        { id: 'f-1', employeeId: 'emp-1', employeeName: 'KONAN Kouassi Jean', folderType: 'Identité', documentCount: 3, lastUpdated: '2026-05-12', status: 'Complet' },
+        { id: 'f-1', employeeId: 'emp-1', employeeName: 'KONAN Kouassi Jean', folderType: 'Identité & CMU', documentCount: 3, lastUpdated: '2026-05-12', status: 'Complet' },
+        { id: 'f-rib-1', employeeId: 'emp-1', employeeName: 'KONAN Kouassi Jean', folderType: 'RIB & Banques', documentCount: 1, lastUpdated: '2026-05-12', status: 'Complet' },
+        { id: 'f-permis-1', employeeId: 'emp-1', employeeName: 'KONAN Kouassi Jean', folderType: 'Permis de conduire', documentCount: 1, lastUpdated: '2026-05-12', status: 'Complet' },
         { id: 'f-2', employeeId: 'emp-1', employeeName: 'KONAN Kouassi Jean', folderType: 'Contrats Signés', documentCount: 1, lastUpdated: '2026-01-15', status: 'Complet' },
-        { id: 'f-3', employeeId: 'emp-2', employeeName: 'DIARRASSOUBA Mariam', folderType: 'Identité', documentCount: 2, lastUpdated: '2026-06-02', status: 'Incomplet' },
-        { id: 'f-4', employeeId: 'emp-3', employeeName: 'YAO Koffi Serge', folderType: 'Diplômes', documentCount: 4, lastUpdated: '2026-02-11', status: 'Complet' },
+        { id: 'f-3', employeeId: 'emp-2', employeeName: 'DIARRASSOUBA Mariam', folderType: 'Identité & CMU', documentCount: 2, lastUpdated: '2026-06-02', status: 'Incomplet' },
+        { id: 'f-4', employeeId: 'emp-3', employeeName: 'YAO Koffi Serge', folderType: 'Diplômes & Certifications', documentCount: 4, lastUpdated: '2026-02-11', status: 'Complet' },
       ];
       setFolders(defaultFolders);
       localStorage.setItem(key, JSON.stringify(defaultFolders));
@@ -890,20 +1182,27 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     }
     const emp = employees.find(e => e.id === selectedFolder.employeeId);
     const tpl = contractTemplates.find(t => t.id === selectedContractTemplate);
-    if (!tpl || !emp) return;
+    if (!emp) return;
 
-    let text = tpl.content;
-    text = text.replace(/\{\{NOM\}\}/g, emp.personalDetails?.name?.toUpperCase() || emp.name.split(' ')[0]?.toUpperCase() || '');
-    text = text.replace(/\{\{PRENOM\}\}/g, emp.personalDetails?.firstNames || emp.name.split(' ').slice(1).join(' ') || '');
-    text = text.replace(/\{\{MATRICULE\}\}/g, emp.matricule || '');
-    text = text.replace(/\{\{SALAIRE\}\}/g, (emp.payrollDetails?.baseSalary || emp.salary || 75000).toLocaleString('fr-FR'));
-    text = text.replace(/\{\{POSTE\}\}/g, emp.positionDetails?.title || emp.position || '');
-    text = text.replace(/\{\{DATE_DEBUT\}\}/g, emp.contractDetails?.startDate || emp.hireDate || '');
-    text = text.replace(/\{\{DATE_FIN\}\}/g, emp.contractDetails?.endDate || 'Indéterminée');
-    text = text.replace(/\{\{DUREE\}\}/g, String(emp.contractDetails?.durationMonths || 'N/A'));
-    text = text.replace(/\{\{DEPARTEMENT\}\}/g, emp.positionDetails?.department || emp.department || '');
-    text = text.replace(/\{\{CONVENTION\}\}/g, emp.positionDetails?.collectiveAgreement || 'Non renseigné');
-    text = text.replace(/\{\{SITUATION\}\}/g, emp.contractDetails?.situation || 'local');
+    // Load active enterprise
+    let activeEnterprise = null;
+    try {
+      const compCtx = useCompany();
+      activeEnterprise = compCtx?.activeEnterprise || null;
+    } catch (e) {}
+
+    const text = generateSmartContractText({
+      employee: emp,
+      contract: {
+        type: tpl?.type || emp.contractDetails?.nature || 'CDI',
+        salary: emp.payrollDetails?.baseSalary || emp.salary,
+        startDate: emp.contractDetails?.startDate || emp.hireDate,
+        endDate: emp.contractDetails?.endDate,
+        trialPeriod: '3 mois'
+      },
+      enterprise: activeEnterprise,
+      templateContent: tpl?.content
+    });
 
     setGeneratedContractText(text);
   }, [selectedContractTemplate, selectedFolder, employees, contractTemplates]);
@@ -1103,10 +1402,13 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
                     onChange={e => setForm({...form, folderType: e.target.value as any})}
                     className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all cursor-pointer"
                   >
-                    <option value="Identité">Pièces d'identité (CNI, Passeport)</option>
-                    <option value="Diplômes">Diplômes & Certifications</option>
+                    <option value="Identité & CMU">Pièces d'identité & CMU (CNI, CMU, Passeport)</option>
+                    <option value="RIB & Banques">RIB & Coordonnées bancaires</option>
+                    <option value="Permis de conduire">Permis de conduire numérisé</option>
+                    <option value="Diplômes & Certifications">Diplômes, Titres & Certifications</option>
                     <option value="Contrats Signés">Contrats de travail signés</option>
-                    <option value="Médical">Dossier médical & Aptitude</option>
+                    <option value="Attestations & Justificatifs">Attestations, Casier B3 & Résidence</option>
+                    <option value="Médical & Aptitude">Dossier médical & Aptitude</option>
                     <option value="Disciplinaire">Dossier disciplinaire</option>
                   </select>
                 </div>
@@ -1147,34 +1449,58 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
       {selectedFolder && (() => {
         const emp = employees.find(e => e.id === selectedFolder.employeeId);
         
+        // Custom added documents saved in localStorage for this folder
+        const customDocsKey = `custom_folder_docs_${selectedFolder.id}`;
+        const savedCustomDocsJson = localStorage.getItem(customDocsKey);
+        const customDocs: Array<{ name: string; date: string; size: string }> = savedCustomDocsJson ? JSON.parse(savedCustomDocsJson) : [];
+
         // Helper to check what default simulated documents are in this folder type
-        let docList = [
-          { name: "Document d'indexation initiale.pdf", date: selectedFolder.lastUpdated, size: "142 KB" }
-        ];
-        if (selectedFolder.folderType === 'Identité') {
-          docList = [
+        let defaultDocList: Array<{ name: string; date: string; size: string }> = [];
+        const fType = selectedFolder.folderType.toLowerCase();
+
+        if (fType.includes('identité') || fType.includes('cmu')) {
+          defaultDocList = [
             { name: "Photocopie_CNI_Recto_Verso.pdf", date: "2026-05-10", size: "1.2 MB" },
+            { name: "Carte_CMU_Recto_Verso.pdf", date: "2026-05-11", size: "980 KB" },
             { name: "Passeport_Biometrique.pdf", date: "2026-05-12", size: "3.4 MB" },
             { name: "Attestation_Residence_Valide.pdf", date: selectedFolder.lastUpdated, size: "520 KB" }
           ];
-        } else if (selectedFolder.folderType === 'Diplômes') {
-          docList = [
-            { name: `Diplome_Master_Declare_${emp?.personalDetails?.nationality || 'Ivoirienne'}.pdf`, date: "2026-02-11", size: "2.1 MB" },
-            { name: "Certificat_De_Travail_Precedent.pdf", date: "2026-02-11", size: "850 KB" }
+        } else if (fType.includes('rib') || fType.includes('banque')) {
+          defaultDocList = [
+            { name: "Releve_Identite_Bancaire_RIB_Officiel.pdf", date: selectedFolder.lastUpdated, size: "450 KB" },
+            { name: "Attestation_Ouverture_Compte_Bancaire.pdf", date: selectedFolder.lastUpdated, size: "310 KB" }
           ];
-        } else if (selectedFolder.folderType === 'Médical') {
-          docList = [
+        } else if (fType.includes('permis')) {
+          defaultDocList = [
+            { name: "Permis_De_Conduire_Biometrique_Recto_Verso.pdf", date: selectedFolder.lastUpdated, size: "1.1 MB" }
+          ];
+        } else if (fType.includes('diplôme') || fType.includes('certification') || fType.includes('diplomes')) {
+          defaultDocList = [
+            { name: `Diplome_Master_Declare_${emp?.personalDetails?.nationality || 'Ivoirienne'}.pdf`, date: "2026-02-11", size: "2.1 MB" },
+            { name: "Certificat_Homologation_BAC_Licence.pdf", date: "2026-02-11", size: "850 KB" }
+          ];
+        } else if (fType.includes('attestation') || fType.includes('justificatif')) {
+          defaultDocList = [
+            { name: "Extrait_Casier_Judiciaire_B3.pdf", date: selectedFolder.lastUpdated, size: "720 KB" },
+            { name: "Certificat_De_Residence_Legalise.pdf", date: selectedFolder.lastUpdated, size: "480 KB" },
+            { name: "Attestation_De_Travail_Ancien_Employeur.pdf", date: "2026-01-10", size: "1.4 MB" }
+          ];
+        } else if (fType.includes('médical') || fType.includes('medical')) {
+          defaultDocList = [
             { name: "Certificat_Aptitude_Medecine_Du_Travail.pdf", date: "2026-04-03", size: "1.1 MB" }
           ];
-        } else if (selectedFolder.folderType === 'Disciplinaire') {
-          docList = [];
+        } else {
+          defaultDocList = [
+            { name: "Document_Indexation_Initiale.pdf", date: selectedFolder.lastUpdated, size: "142 KB" }
+          ];
         }
+
+        let docList = [...defaultDocList, ...customDocs];
 
         // Add any saved contracts generated from template
         const savedContractKey = `saved_contract_${selectedFolder.employeeId}_${selectedFolder.id}`;
         const savedContractText = localStorage.getItem(savedContractKey);
         if (savedContractText) {
-          // If contract is saved, make sure it is in our docList
           if (!docList.some(d => d.name === "Contrat_de_Travail_Genere.pdf")) {
             docList.push({ name: "Contrat_de_Travail_Genere.pdf", date: selectedFolder.lastUpdated, size: "84 KB" });
           }
@@ -1242,15 +1568,27 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
 
                   {/* Personal details info widget */}
                   <div className="p-4 bg-blue-50/40 border border-blue-100 rounded-2xl space-y-2">
-                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Informations du collaborateur</h5>
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Informations du collaborateur</h5>
+                      {emp && (
+                        <button
+                          type="button"
+                          onClick={() => setViewA4Employee(emp)}
+                          className="px-2 py-0.5 bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white rounded-lg text-[8px] font-black uppercase tracking-wider flex items-center gap-1 border-0 cursor-pointer shadow-xs"
+                        >
+                          <Eye className="w-3 h-3" /> Fiche A4
+                        </button>
+                      )}
+                    </div>
                     {emp ? (
                       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] font-bold text-slate-700">
                         <div><span className="text-slate-400 font-medium">Matricule:</span> {emp.matricule}</div>
                         <div><span className="text-slate-400 font-medium">Poste:</span> {emp.positionDetails?.title || emp.position}</div>
+                        <div><span className="text-slate-400 font-medium">N° CNI:</span> {emp.personalDetails?.cniNumber || 'Non précisé'}</div>
+                        <div><span className="text-slate-400 font-medium">N° CMU:</span> {emp.personalDetails?.cmuNumber || 'Non précisé'}</div>
                         <div><span className="text-slate-400 font-medium">Département:</span> {emp.positionDetails?.department || emp.department}</div>
                         <div><span className="text-slate-400 font-medium">Contrat:</span> {emp.contractDetails?.type || 'CDI'}</div>
                         <div><span className="text-slate-400 font-medium">Salaire Brut:</span> {(emp.payrollDetails?.baseSalary || emp.salary || 75000).toLocaleString('fr-FR')} FCFA</div>
-                        <div><span className="text-slate-400 font-medium">Type:</span> {emp.contractDetails?.collaboratorType || 'Salarié'}</div>
                         <div><span className="text-slate-400 font-medium">Nationalité:</span> {emp.personalDetails?.nationality || 'Non précisé'}</div>
                         <div><span className="text-slate-400 font-medium">Statut:</span> {emp.status}</div>
                       </div>
@@ -1352,12 +1690,86 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
                       )}
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col justify-center items-center text-center p-8 space-y-3 bg-slate-50 rounded-2xl border border-dashed border-slate-150">
-                      <FolderOpen className="w-12 h-12 text-slate-300" />
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">Espace de classement sécurisé</h4>
-                        <p className="text-[10px] text-slate-400 font-bold max-w-sm mx-auto leading-normal uppercase mt-1 tracking-wider">
-                          Les pièces justificatives de cette chemise ({selectedFolder.folderType}) sont conservées conformément aux règles RGPD et code du travail.
+                    <div className="h-full flex flex-col justify-between space-y-4">
+                      <div className="space-y-3">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+                          Ajouter un document numérisé (RIB, Permis, Diplômes...)
+                        </h4>
+                        
+                        <div 
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                              const file = e.dataTransfer.files[0];
+                              const newDoc = {
+                                name: file.name,
+                                date: new Date().toISOString().substring(0, 10),
+                                size: `${(file.size / 1024).toFixed(0)} KB`
+                              };
+                              const updatedCustomDocs = [...customDocs, newDoc];
+                              localStorage.setItem(customDocsKey, JSON.stringify(updatedCustomDocs));
+                              
+                              const updatedFolders = folders.map(f => {
+                                if (f.id === selectedFolder.id) {
+                                  return { ...f, documentCount: f.documentCount + 1, lastUpdated: new Date().toISOString().substring(0, 10), status: 'Complet' as const };
+                                }
+                                return f;
+                              });
+                              saveFolders(updatedFolders);
+                              setSelectedFolder({ ...selectedFolder, documentCount: selectedFolder.documentCount + 1, status: 'Complet' as const });
+                            }
+                          }}
+                          onClick={() => {
+                            const fileName = prompt("Entrez le nom de la pièce à joindre (ex: RIB_BANQUE_BOA.pdf, Permis_Conduire_CatB.pdf, Diplome_Licence_2024.pdf) :", `Scan_${selectedFolder.folderType.replace(/[^a-zA-Z0-0]/g, '_')}.pdf`);
+                            if (fileName) {
+                              const cleanName = fileName.endsWith('.pdf') || fileName.endsWith('.png') || fileName.endsWith('.jpg') ? fileName : `${fileName}.pdf`;
+                              const newDoc = {
+                                name: cleanName,
+                                date: new Date().toISOString().substring(0, 10),
+                                size: "1.2 MB"
+                              };
+                              const updatedCustomDocs = [...customDocs, newDoc];
+                              localStorage.setItem(customDocsKey, JSON.stringify(updatedCustomDocs));
+
+                              const updatedFolders = folders.map(f => {
+                                if (f.id === selectedFolder.id) {
+                                  return { ...f, documentCount: f.documentCount + 1, lastUpdated: new Date().toISOString().substring(0, 10), status: 'Complet' as const };
+                                }
+                                return f;
+                              });
+                              saveFolders(updatedFolders);
+                              setSelectedFolder({ ...selectedFolder, documentCount: selectedFolder.documentCount + 1, status: 'Complet' as const });
+                              if (selectedDossierId) {
+                                saveActionLog(selectedDossierId, {
+                                  type: 'Indexation',
+                                  desc: `Pièce numérisée ajoutée (${newDoc.name})`,
+                                  details: `Document indexé dans ${selectedFolder.folderType} pour ${selectedFolder.employeeName}`
+                                });
+                              }
+                            }
+                          }}
+                          className="border-2 border-dashed border-slate-200 hover:border-[#4A9EC9] bg-slate-50/60 hover:bg-slate-50 p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-3 cursor-pointer transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-2xl bg-white border border-slate-150 flex items-center justify-center text-[#4A9EC9] group-hover:scale-105 transition-transform shadow-sm">
+                            <Upload className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-slate-800 uppercase tracking-tight">Cliquer ou glisser-déposer un fichier</p>
+                            <p className="text-[10px] text-slate-400 font-medium mt-1">Numérisations acceptées : RIB, Permis de conduire, Diplômes, CNI, Attestations en PDF, PNG ou JPG</p>
+                          </div>
+                          <span className="px-3 py-1 bg-[#4A9EC9]/10 text-[#4A9EC9] rounded-full text-[9px] font-black uppercase tracking-wider">
+                            Indexation Numérique Sécurisée
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl space-y-1">
+                        <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-black uppercase tracking-wider">
+                          <CheckCircle2 className="w-4 h-4" /> Chemise RH Réglémentaire
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                          Les pièces enregistrées dans la chemise <span className="font-bold text-slate-700">"{selectedFolder.folderType}"</span> sont archivées avec horodatage conformément aux normes de conformité sociale et légale.
                         </p>
                       </div>
                     </div>
@@ -1380,6 +1792,14 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
           </div>
         );
       })()}
+
+      {/* A4 Sheet Modal */}
+      {viewA4Employee && (
+        <EmployeeA4SheetModal
+          data={viewA4Employee}
+          onClose={() => setViewA4Employee(null)}
+        />
+      )}
     </div>
   );
 }

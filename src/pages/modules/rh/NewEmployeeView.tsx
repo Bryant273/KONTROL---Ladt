@@ -19,12 +19,16 @@ import {
   BookOpen,
   CheckCircle2,
   Loader2,
-  Home
+  Home,
+  Eye,
+  Printer,
+  Shield
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { saveActionLog } from '../../../lib/auditLogger';
 import { Employee } from './PersonnelViews';
 import { BulletinModele, Rubrique } from './ParametrageViews';
+import { EmployeeA4SheetModal } from '../../../components/modals/EmployeeA4SheetModal';
 
 // Cascading geography database for smart selections
 const GEOGRAPHY_DATA: Record<string, Record<string, string[]>> = {
@@ -84,6 +88,7 @@ interface ChildInfo {
 export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showA4Modal, setShowA4Modal] = useState(false);
   const [templates, setTemplates] = useState<BulletinModele[]>([]);
   const [rubriques, setRubriques] = useState<Rubrique[]>([]);
   
@@ -99,6 +104,8 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
     birthPlace: '',
     maritalStatus: 'Célibataire',
     childrenCount: 0,
+    cniNumber: '',
+    cmuNumber: '',
     socialSecurityNumber: '',
     nationality: 'Ivoirienne',
     address: '',
@@ -119,6 +126,9 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
     customCity: '',
     customCommune: '',
     quartier: '',
+    emergencyContactName: '',
+    emergencyContactRelation: 'Conjoint(e)',
+    emergencyContactPhone: '',
     bankName: '',
     rib: '',
   });
@@ -793,6 +803,30 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                 </div>
 
                 <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Numéro CNI / Passeport</label>
+                  <input 
+                    type="text" 
+                    value={personal.cniNumber}
+                    onChange={e => setPersonal({...personal, cniNumber: e.target.value})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-[#4A9EC9]"
+                    placeholder="ex: C0123456789"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Numéro CMU (Couverture Maladie)</label>
+                  <input 
+                    type="text" 
+                    value={personal.cmuNumber}
+                    onChange={e => setPersonal({...personal, cmuNumber: e.target.value})}
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-[#4A9EC9]"
+                    placeholder="ex: 000-12345678-9"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Numéro Sécurité Sociale (CNPS)</label>
                   <input 
                     type="text" 
@@ -1076,6 +1110,58 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                     className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
                     placeholder="ex: Zone 4, Rue du Canal"
                   />
+                </div>
+              </div>
+
+              {/* Personne à prévenir en cas d'urgence */}
+              <div className="bg-amber-50/60 rounded-2xl border border-amber-200/80 p-6 space-y-4">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-amber-600" /> Personne à Prévenir en Cas d'Urgence
+                  </span>
+                  <p className="text-[11px] text-amber-800/80 mt-0.5">Coordonnées de la personne référente à contacter en priorité en cas d'accident ou d'urgence médicale.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nom & Prénoms du Contact *</label>
+                    <input 
+                      type="text"
+                      required
+                      value={coords.emergencyContactName}
+                      onChange={e => setCoords({...coords, emergencyContactName: e.target.value})}
+                      className="w-full h-11 px-4 bg-white border border-amber-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500"
+                      placeholder="ex: KASSI Henriette"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Lien de Parenté / Relation</label>
+                    <select
+                      value={coords.emergencyContactRelation}
+                      onChange={e => setCoords({...coords, emergencyContactRelation: e.target.value})}
+                      className="w-full h-11 px-4 bg-white border border-amber-200 rounded-xl text-xs font-bold outline-none cursor-pointer focus:border-amber-500"
+                    >
+                      <option value="Conjoint(e)">Conjoint(e)</option>
+                      <option value="Père / Mère">Père / Mère</option>
+                      <option value="Frère / Sœur">Frère / Sœur</option>
+                      <option value="Enfant Major">Enfant Majeur</option>
+                      <option value="Oncle / Tante">Oncle / Tante</option>
+                      <option value="Ami(e) / Proche">Ami(e) / Proche</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Numéro Téléphone d'Urgence *</label>
+                    <input 
+                      type="text"
+                      required
+                      value={coords.emergencyContactPhone}
+                      onChange={e => setCoords({...coords, emergencyContactPhone: e.target.value})}
+                      className="w-full h-11 px-4 bg-white border border-amber-200 rounded-xl text-xs font-mono font-black outline-none focus:border-amber-500 text-emerald-800"
+                      placeholder="ex: +225 05 01 02 03 04"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1531,11 +1617,19 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                 <p className="text-xs text-slate-400 mt-1">Indexation des documents officiels requis pour la conformité administrative</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[
                   { id: 'cv', label: 'Curriculum Vitae (CV) *', placeholder: 'Attacher le CV de l\'employé (PDF)' },
                   { id: 'cni', label: 'Pièce d\'identité (CNI / Passeport) *', placeholder: 'Justificatif d\'identité nationale' },
+                  { id: 'cmu', label: 'Carte CMU (Couverture Maladie) *', placeholder: 'Scanné de la carte CMU officielle de l\'employé' },
+                  { id: 'rib', label: 'Relevé d\'Identité Bancaire (RIB) *', placeholder: 'Scan du RIB pour le virement des salaires' },
+                  { id: 'casier_b3', label: 'Extrait de Casier Judiciaire (Bulletin N° 3) *', placeholder: 'Bulletin de casier judiciaire datant de moins de 3 mois' },
+                  { id: 'dossier_juridique', label: 'Dossier Juridique & Disciplinaire', placeholder: 'Documents contentieux ou affaires judiciaires le cas échéant' },
+                  { id: 'certificat_residence', label: 'Certificat de Résidence & Domiciliation', placeholder: 'Certificat de résidence délivré par la mairie ou sous-préfecture' },
+                  { id: 'permis', label: 'Permis de Conduire', placeholder: 'Copie numérisée du permis de conduire valide' },
+                  { id: 'diplomes', label: 'Diplômes & Certifications *', placeholder: 'Scans des diplômes académiques & certificats' },
                   { id: 'extrait', label: 'Extrait d\'Acte de Naissance', placeholder: 'Copie certifiée de l\'extrait de naissance' },
+                  { id: 'certificat_travail', label: 'Certificats de Travail Antérieurs', placeholder: 'Attestations et certificats de travail passés' },
                   { id: 'photo', label: 'Photo d\'Identité Officielle', placeholder: 'Photo d\'identité au format PNG ou JPG' }
                 ].map((doc) => {
                   const fileState = attachedFiles[doc.id];
@@ -1545,30 +1639,30 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                       key={doc.id}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => handleFileDrop(e, doc.id)}
-                      className="border-2 border-dashed border-slate-200 hover:border-[#4A9EC9] rounded-2xl p-5 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-center items-center text-center space-y-3 cursor-pointer group"
+                      className="border-2 border-dashed border-slate-200 hover:border-[#4A9EC9] rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-center items-center text-center space-y-2.5 cursor-pointer group"
                       onClick={() => handleSimulateUpload(doc.id, `JUSTIF_${doc.id.toUpperCase()}_${personal.name || 'EMPLOYE'}.pdf`)}
                     >
-                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-150 flex items-center justify-center text-slate-400 group-hover:text-[#4A9EC9] transition-all">
+                      <div className="w-9 h-9 rounded-xl bg-white border border-slate-150 flex items-center justify-center text-slate-400 group-hover:text-[#4A9EC9] transition-all shadow-xs">
                         {fileState?.status === 'loading' ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <FileUp className="w-5 h-5" />
+                          <FileUp className="w-4 h-4" />
                         )}
                       </div>
 
                       <div>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{doc.label}</p>
-                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">{doc.placeholder}</p>
+                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{doc.label}</p>
+                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">{doc.placeholder}</p>
                       </div>
 
                       {fileState?.status === 'success' ? (
-                        <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Téléchargé avec succès
+                        <div className="bg-emerald-50 text-emerald-600 px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Téléchargé avec succès
                         </div>
                       ) : fileState?.status === 'loading' ? (
-                        <p className="text-[9px] text-slate-400 font-bold animate-pulse">Indexation en cours...</p>
+                        <p className="text-[8px] text-slate-400 font-bold animate-pulse">Indexation en cours...</p>
                       ) : (
-                        <p className="text-[9px] text-slate-400 font-bold">Glisser-déposer ou cliquer pour attacher</p>
+                        <p className="text-[8px] text-slate-400 font-bold">Glisser-déposer ou cliquer pour attacher</p>
                       )}
                     </div>
                   );
@@ -1839,11 +1933,20 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
           {/* STEP 8: RECAPITULATIF (BENTO-GRID STYLE REVIEW) */}
           {currentStep === 8 && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 animate-bounce" /> Récapitulatif global de l'embauche
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">Veuillez relire attentivement l'ensemble des fiches indexées avant de soumettre le profil à la base du personnel.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 text-white p-5 rounded-2xl shadow-lg">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-white">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Récapitulatif global de l'embauche
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1">Veuillez relire attentivement l'ensemble des fiches indexées ou prévisualiser la Fiche Signalétique A4 avant validation.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowA4Modal(true)}
+                  className="px-4 py-2.5 bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-0 cursor-pointer shadow-lg shadow-[#4A9EC9]/30 transition-all shrink-0"
+                >
+                  <Eye className="w-4 h-4" /> Visualiser la Fiche A4 (Printable)
+                </button>
               </div>
 
               {/* Bento Grid layout */}
@@ -1867,6 +1970,18 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                     <div className="flex justify-between border-b border-slate-200 pb-1">
                       <span className="text-slate-400">Né(e) le :</span>
                       <span>{personal.birthDate} à {personal.birthPlace}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-200 pb-1">
+                      <span className="text-slate-400">N° CNI :</span>
+                      <span className="font-mono text-[11px] text-slate-900">{personal.cniNumber || 'Non renseigné'}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-200 pb-1">
+                      <span className="text-slate-400">N° CMU :</span>
+                      <span className="font-mono text-[11px] text-slate-900">{personal.cmuNumber || 'Non renseigné'}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-200 pb-1">
+                      <span className="text-slate-400">N° CNPS :</span>
+                      <span className="font-mono text-[11px] text-slate-900">{personal.socialSecurityNumber || 'Non renseigné'}</span>
                     </div>
                     <div className="flex justify-between border-b border-slate-200 pb-1">
                       <span className="text-slate-400">Statut :</span>
@@ -2068,17 +2183,30 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-2">
                   <FileUp className="w-3.5 h-3.5" /> Pièces jointes vérifiées
                 </span>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {['cv', 'cni', 'extrait', 'photo'].map(docType => {
-                    const isAttached = attachedFiles[docType]?.status === 'success';
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                  {[
+                    { id: 'cv', label: 'CV' },
+                    { id: 'cni', label: 'CNI / Passeport' },
+                    { id: 'cmu', label: 'Carte CMU' },
+                    { id: 'rib', label: 'RIB Bancaire' },
+                    { id: 'casier_b3', label: 'Casier B3' },
+                    { id: 'dossier_juridique', label: 'Affaires Juridiques' },
+                    { id: 'certificat_residence', label: 'Résidence' },
+                    { id: 'permis', label: 'Permis Conduire' },
+                    { id: 'diplomes', label: 'Diplômes' },
+                    { id: 'extrait', label: 'Extrait Naissance' },
+                    { id: 'certificat_travail', label: 'Attestations Travail' },
+                    { id: 'photo', label: 'Photo ID' }
+                  ].map(docItem => {
+                    const isAttached = attachedFiles[docItem.id]?.status === 'success';
                     return (
-                      <div key={docType} className={cn(
-                        "p-2.5 rounded-xl border flex items-center gap-2 font-bold text-[10px]",
+                      <div key={docItem.id} className={cn(
+                        "p-2 rounded-xl border flex items-center gap-2 font-bold text-[10px]",
                         isAttached ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-white text-slate-400 border-slate-200"
                       )}>
                         <Check className={cn("w-3.5 h-3.5 shrink-0", isAttached ? "text-emerald-600" : "text-slate-200")} />
-                        <span className="truncate uppercase">
-                          {docType === 'cv' ? 'CV' : docType === 'cni' ? 'CNI' : docType === 'extrait' ? 'Extrait de Naissance' : 'Photo ID'}
+                        <span className="truncate uppercase font-black">
+                          {docItem.label}
                         </span>
                       </div>
                     );
@@ -2144,6 +2272,42 @@ export function NewEmployeeView({ selectedDossierId, onBack }: NewEmployeeViewPr
         </div>
 
       </div>
+
+      {/* A4 Sheet Preview Modal */}
+      {showA4Modal && (
+        <EmployeeA4SheetModal
+          data={{
+            id: `temp-${Date.now()}`,
+            matricule: personal.matricule || 'EMP-2026-TEMP',
+            name: personal.name,
+            email: personal.email,
+            phone: personal.phone,
+            department: position.department,
+            position: position.title,
+            hireDate: contract.hireDate,
+            salary: payroll.baseSalary,
+            status: 'Actif',
+            personalDetails: { ...personal, children: childrenDetails },
+            coordinates: { ...coords },
+            contractDetails: { ...contract },
+            positionDetails: { ...position },
+            payrollDetails: { ...payroll },
+            attachments: Object.keys(attachedFiles).reduce((acc, key) => {
+              if (attachedFiles[key].status === 'success') {
+                acc[key] = attachedFiles[key].name;
+              }
+              return acc;
+            }, {} as Record<string, string>),
+            cvDetailed: {
+              educations,
+              certificates,
+              experiences,
+              skills
+            }
+          }}
+          onClose={() => setShowA4Modal(false)}
+        />
+      )}
     </div>
   );
 }
