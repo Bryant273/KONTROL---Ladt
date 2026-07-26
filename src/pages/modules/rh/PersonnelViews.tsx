@@ -29,7 +29,9 @@ import {
   Award,
   CreditCard,
   Printer,
-  X
+  X,
+  AlertCircle,
+  Layers
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { saveActionLog } from '../../../lib/auditLogger';
@@ -1126,6 +1128,7 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
 export function FoldersView({ selectedDossierId }: ViewProps) {
   const [folders, setFolders] = useState<HrFolder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
@@ -1141,12 +1144,94 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     status: 'Complet' as 'Complet' | 'Incomplet'
   });
 
+  const COLLECTED_DATA_TYPES = [
+    {
+      id: 'identity',
+      title: "1. Identité, CMU & État Civil",
+      folderType: "Identité & CMU",
+      badge: "Identité",
+      description: "CNI, Passeport biométrique, Carte CMU, Extrait d'acte de naissance, Photo d'identité",
+      icon: Shield,
+      color: "bg-blue-50 text-[#4A9EC9] border-blue-200"
+    },
+    {
+      id: 'bank',
+      title: "2. Coordonnées Bancaires & RIB",
+      folderType: "RIB & Banques",
+      badge: "RIB",
+      description: "Relevé d'Identité Bancaire (RIB) officiel, Attestation d'ouverture de compte, Domiciliation de paie",
+      icon: CreditCard,
+      color: "bg-emerald-50 text-emerald-600 border-emerald-200"
+    },
+    {
+      id: 'contracts',
+      title: "3. Contrats de Travail & Avenants",
+      folderType: "Contrats Signés",
+      badge: "Contrats",
+      description: "Contrats de travail signés (CDI, CDD, Stage), Avenants, Promesse d'embauche, Fiche de poste",
+      icon: FileText,
+      color: "bg-indigo-50 text-indigo-600 border-indigo-200"
+    },
+    {
+      id: 'diplomas',
+      title: "4. Diplômes, Titres & Certifications",
+      folderType: "Diplômes & Certifications",
+      badge: "Diplômes",
+      description: "Diplômes universitaires et académiques, Homologations BAC/Master, Certifications professionnelles",
+      icon: Award,
+      color: "bg-purple-50 text-purple-600 border-purple-200"
+    },
+    {
+      id: 'driving',
+      title: "5. Permis de Conduire & Transport",
+      folderType: "Permis de conduire",
+      badge: "Permis",
+      description: "Permis de conduire biométrique (Catégories B/C/D/E), Attestations de capacité de conduite",
+      icon: FileCheck,
+      color: "bg-amber-50 text-amber-600 border-amber-200"
+    },
+    {
+      id: 'legal',
+      title: "6. Casier Judiciaire B3 & Justificatifs Légaux",
+      folderType: "Attestations & Justificatifs",
+      badge: "Casier B3",
+      description: "Extrait de casier judiciaire (Bulletin N° 3 récent), Certificat de résidence légalisé, Attestations de travail",
+      icon: CheckCircle2,
+      color: "bg-cyan-50 text-cyan-600 border-cyan-200"
+    },
+    {
+      id: 'medical',
+      title: "7. Dossier Médical & Aptitude au Travail",
+      folderType: "Médical & Aptitude",
+      badge: "Médical",
+      description: "Certificat d'aptitude médicale du travail, Carnet de santé, Visites médicales périodiques",
+      icon: CheckCircle,
+      color: "bg-[#4A9EC9]/10 text-[#4A9EC9] border-[#4A9EC9]/30"
+    },
+    {
+      id: 'discipline',
+      title: "8. Dossier Disciplinaire & Contentieux",
+      folderType: "Disciplinaire",
+      badge: "Disciplinaire",
+      description: "Demandes d'explication, Avertissements, Blâmes, Procès-verbaux d'entretien, Sanctions",
+      icon: AlertCircle,
+      color: "bg-rose-50 text-rose-600 border-rose-200"
+    }
+  ];
+
   useEffect(() => {
     // Load Employees
     const empKey = `employees_${selectedDossierId || 'default'}`;
     const savedEmps = localStorage.getItem(empKey);
     if (savedEmps) {
       setEmployees(JSON.parse(savedEmps));
+    } else {
+      const defaultEmps = [
+        { id: 'emp-1', name: 'KONAN Kouassi Jean', matricule: 'EMP-2026-001', position: 'Chef de Projet IT', department: 'Informatique', status: 'Actif', salary: 650000 },
+        { id: 'emp-2', name: 'DIARRASSOUBA Mariam', matricule: 'EMP-2026-002', position: 'Comptable Senior', department: 'Finance & Comptabilité', status: 'Actif', salary: 450000 },
+        { id: 'emp-3', name: 'YAO Koffi Serge', matricule: 'EMP-2026-003', position: 'Responsable Logistique', department: 'Opérations', status: 'Actif', salary: 500000 },
+      ];
+      setEmployees(defaultEmps);
     }
 
     // Load Contract Templates
@@ -1223,7 +1308,6 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     const selectedEmpObj = employees.find(x => x.id === form.employeeId);
     if (!selectedEmpObj) return;
 
-    // Check if employee already has this folderType
     const duplicate = folders.find(f => f.employeeId === form.employeeId && f.folderType === form.folderType);
     if (duplicate) {
       alert("Ce dossier existe déjà pour cet employé. Veuillez ajouter des documents à l'intérieur.");
@@ -1254,7 +1338,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
 
     setForm({
       employeeId: '',
-      folderType: 'Identité',
+      folderType: 'Identité & CMU',
       status: 'Complet'
     });
   };
@@ -1273,36 +1357,98 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     }
   };
 
-  const filtered = folders.filter(f => 
-    f.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.folderType.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Find existing folder for an employee under a given folderType
+  const getFolderForEmployee = (empId: string, folderType: string) => {
+    return folders.find(f => 
+      f.employeeId === empId && 
+      (f.folderType.toLowerCase() === folderType.toLowerCase() ||
+       f.folderType.toLowerCase().includes(folderType.toLowerCase().split(' ')[0]))
+    );
+  };
+
+  const handleOpenOrCreateFolder = (emp: any, dataType: typeof COLLECTED_DATA_TYPES[0]) => {
+    let existing = getFolderForEmployee(emp.id, dataType.folderType);
+    if (!existing) {
+      existing = {
+        id: `fld-${emp.id}-${dataType.id}`,
+        employeeId: emp.id,
+        employeeName: emp.name,
+        folderType: dataType.folderType,
+        documentCount: 0,
+        lastUpdated: new Date().toISOString().substring(0, 10),
+        status: 'Incomplet'
+      };
+    }
+    setSelectedFolder(existing);
+    setSelectedContractTemplate('');
+  };
+
+  // Filter Categories by search term and selected tab
+  const displayedDataTypes = COLLECTED_DATA_TYPES.filter(dt => {
+    if (selectedCategoryFilter !== 'all' && dt.id !== selectedCategoryFilter) return false;
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    
+    // Match if category matches search term
+    const categoryMatches = dt.title.toLowerCase().includes(term) || dt.description.toLowerCase().includes(term) || dt.folderType.toLowerCase().includes(term);
+    
+    // Or if any employee in this category matches search term
+    const employeeMatches = employees.some(e => e.name.toLowerCase().includes(term) || e.matricule?.toLowerCase().includes(term));
+
+    return categoryMatches || employeeMatches;
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Dossiers administratifs dématérialisés</h2>
-          <p className="text-xs text-slate-400">Suivi des pièces justificatives, dossiers médicaux, diplômes et documents d'identité</p>
+          <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Dossiers administratifs & pièces collectées</h2>
+          <p className="text-xs text-slate-400">Organisation par nature de données RH collectées et suivi individuel par collaborateur</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
           className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4A9EC9]/20 border-0"
         >
-          <Plus className="w-4 h-4" /> Indexer un dossier
+          <Plus className="w-4 h-4" /> Indexer une pièce / chemise
         </button>
       </div>
 
-      {/* Folders List Layout */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          {filtered.length} chemise(s) administrative(s)
-        </span>
-        <div className="relative w-80">
+      {/* Filter and Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
+          <button
+            onClick={() => setSelectedCategoryFilter('all')}
+            className={cn(
+              "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border-0 cursor-pointer",
+              selectedCategoryFilter === 'all' 
+                ? "bg-slate-900 text-white shadow-sm" 
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            )}
+          >
+            Tous les types ({COLLECTED_DATA_TYPES.length})
+          </button>
+
+          {COLLECTED_DATA_TYPES.map(dt => (
+            <button
+              key={dt.id}
+              onClick={() => setSelectedCategoryFilter(dt.id)}
+              className={cn(
+                "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border-0 cursor-pointer flex items-center gap-1.5",
+                selectedCategoryFilter === dt.id 
+                  ? "bg-[#4A9EC9] text-white shadow-sm" 
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
+            >
+              <span>{dt.badge}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full md:w-72 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Filtrer par salarié ou nature du dossier..."
+            placeholder="Rechercher un salarié ou un type de document..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl pl-9 pr-4 text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all"
@@ -1310,63 +1456,153 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
         </div>
       </div>
 
-      {/* Grid of folders */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((fld) => (
-          <div key={fld.id} className="bg-white border border-slate-100 rounded-[1.5rem] p-5 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className={cn(
-                  "px-2.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                  fld.folderType === 'Identité' ? "bg-blue-50 text-[#4A9EC9]" :
-                  fld.folderType === 'Médical' ? "bg-emerald-50 text-emerald-600" :
-                  fld.folderType === 'Diplômes' ? "bg-purple-50 text-purple-600" :
-                  "bg-slate-100 text-slate-700"
-                )}>
-                  {fld.folderType}
-                </span>
-                <span className={cn(
-                  "text-[9px] font-black uppercase tracking-wider",
-                  fld.status === 'Complet' ? "text-emerald-500" : "text-amber-500"
-                )}>
-                  ● {fld.status}
-                </span>
-              </div>
+      {/* CATEGORY GROUPED SECTIONS (Types de données collectées) */}
+      <div className="space-y-8">
+        {displayedDataTypes.map(dataType => {
+          const IconComp = dataType.icon;
+          
+          // Filter employees for this category
+          const filteredEmployees = employees.filter(emp => {
+            if (!searchTerm) return true;
+            const term = searchTerm.toLowerCase();
+            return emp.name.toLowerCase().includes(term) || emp.matricule?.toLowerCase().includes(term) || dataType.title.toLowerCase().includes(term);
+          });
 
-              <div className="mt-4 flex items-start gap-3">
-                <FolderOpen className="w-8 h-8 text-[#4A9EC9] shrink-0" />
-                <div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase leading-snug tracking-tight group-hover:text-[#4A9EC9] transition-colors">{fld.employeeName}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-wider">{fld.documentCount} pièces jointes indexées</p>
+          // Calculate completion stats for this category
+          const completedCount = filteredEmployees.filter(emp => {
+            const fld = getFolderForEmployee(emp.id, dataType.folderType);
+            return fld && fld.status === 'Complet';
+          }).length;
+
+          const totalEmployees = filteredEmployees.length;
+          const completionPercentage = totalEmployees > 0 ? Math.round((completedCount / totalEmployees) * 100) : 0;
+
+          return (
+            <div key={dataType.id} className="bg-white rounded-[1.75rem] border border-slate-150 p-6 shadow-xs space-y-5">
+              
+              {/* Category Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="flex items-start gap-3.5">
+                  <div className={cn("w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border", dataType.color)}>
+                    <IconComp className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{dataType.title}</h3>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase tracking-widest">
+                        {dataType.folderType}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      {dataType.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                  <div className="text-right">
+                    <span className="text-xs font-black text-slate-800 font-mono">{completedCount} / {totalEmployees} complets</span>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{completionPercentage}% de conformité</p>
+                  </div>
+                  <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${completionPercentage}%` }}></div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 pt-3 border-t border-slate-50 flex items-center justify-between">
-              <button 
-                onClick={() => { setSelectedFolder(fld); setSelectedContractTemplate(''); }}
-                className="text-xs font-bold text-[#4A9EC9] hover:underline bg-transparent border-0 cursor-pointer flex items-center gap-1.5"
-              >
-                <Eye className="w-3.5 h-3.5" /> Ouvrir le dossier
-              </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleDelete(fld.id, fld.employeeName, fld.folderType); }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 bg-slate-50 hover:bg-rose-50 hover:text-rose-500 transition-colors border-0 cursor-pointer"
-                title="Supprimer la chemise"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* Employee Breakdown Cards Grid for this Category */}
+              {filteredEmployees.length === 0 ? (
+                <div className="py-8 text-center text-slate-300 text-xs font-bold uppercase tracking-widest bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  Aucun collaborateur trouvé pour cette catégorie.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredEmployees.map(emp => {
+                    const folder = getFolderForEmployee(emp.id, dataType.folderType);
+                    const isComplete = folder && folder.status === 'Complet';
+                    const isIncomplete = folder && folder.status === 'Incomplet';
+                    const isMissing = !folder || folder.documentCount === 0;
+
+                    return (
+                      <div 
+                        key={emp.id} 
+                        className="bg-slate-50/70 hover:bg-white border border-slate-150 hover:border-[#4A9EC9]/40 rounded-2xl p-4 transition-all shadow-2xs hover:shadow-md flex flex-col justify-between group"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                              <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-black text-xs shrink-0">
+                                {emp.name.charAt(0)}
+                              </div>
+                              <div className="overflow-hidden">
+                                <h4 className="text-xs font-black text-slate-900 uppercase truncate group-hover:text-[#4A9EC9] transition-colors" title={emp.name}>
+                                  {emp.name}
+                                </h4>
+                                <p className="text-[9px] text-slate-400 font-mono font-bold">
+                                  {emp.matricule || 'EMP-2026'} • {emp.positionDetails?.title || emp.position || 'Collaborateur'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <span className={cn(
+                              "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0",
+                              isComplete ? "bg-emerald-100 text-emerald-800" :
+                              isIncomplete ? "bg-amber-100 text-amber-800" :
+                              "bg-slate-200 text-slate-600"
+                            )}>
+                              {isComplete ? "✓ Complet" : isIncomplete ? "● Incomplet" : "○ Non fourni"}
+                            </span>
+                          </div>
+
+                          <div className="mt-3.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                            <span className="font-bold font-mono">
+                              {folder ? `${folder.documentCount} pièce(s) enregistrée(s)` : '0 pièce numérisée'}
+                            </span>
+                            {folder && (
+                              <span className="text-[9px] text-slate-400">Maj : {folder.lastUpdated}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => handleOpenOrCreateFolder(emp, dataType)}
+                            className="flex-1 py-1.5 px-2 bg-white hover:bg-[#4A9EC9] text-[#4A9EC9] hover:text-white border border-[#4A9EC9]/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all shadow-2xs border-0 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" /> Consulter / Gérer
+                          </button>
+
+                          <button
+                            onClick={() => setViewA4Employee(emp)}
+                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors border-0 cursor-pointer"
+                            title="Fiche individuelle A4"
+                          >
+                            A4
+                          </button>
+
+                          {folder && (
+                            <button
+                              onClick={() => handleDelete(folder.id, emp.name, dataType.folderType)}
+                              className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 cursor-pointer"
+                              title="Supprimer la chemise"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
             </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full py-16 bg-white rounded-3xl border border-slate-100 text-center text-[10px] font-black uppercase tracking-widest text-slate-300">
-            Aucun dossier dématérialisé.
-          </div>
-        )}
+          );
+        })}
       </div>
 
-      {/* CREATE FOLDER MODAL */}
+      {/* CREATE / INDEX FOLDER MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#09090b]/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-[2rem] border border-slate-150 shadow-2xl w-full max-w-lg overflow-hidden">
@@ -1396,7 +1632,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nature du dossier / Type</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Type de données collectées</label>
                   <select 
                     value={form.folderType}
                     onChange={e => setForm({...form, folderType: e.target.value as any})}
