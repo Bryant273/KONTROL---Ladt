@@ -1131,6 +1131,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
   const [folders, setFolders] = useState<HrFolder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolderType, setSelectedFolderType] = useState<any | null>(null);
+  const [statusTableFilter, setStatusTableFilter] = useState<'all' | 'Complet' | 'Incomplet' | 'Missing'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
@@ -1385,6 +1386,13 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     setSelectedContractTemplate('');
   };
 
+  // Global calculations for summary statistics
+  const totalEmployeesCount = employees.length;
+  const totalPossibleFolders = totalEmployeesCount * COLLECTED_DATA_TYPES.length;
+  const totalCompletedFolders = folders.filter(f => f.status === 'Complet').length;
+  const globalComplianceRate = totalPossibleFolders > 0 ? Math.round((totalCompletedFolders / totalPossibleFolders) * 100) : 0;
+  const totalArchivedDocuments = folders.reduce((acc, curr) => acc + (curr.documentCount || 0), 0);
+
   // Filter Categories by search term
   const filteredDataTypes = COLLECTED_DATA_TYPES.filter(dt => {
     if (!searchTerm) return true;
@@ -1398,21 +1406,71 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
       {/* LEVEL 1: GRID OF FOLDER TYPES (When no specific folder type is selected) */}
       {!selectedFolderType && (
         <>
+          {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Types de dossiers administratifs</h2>
-              <p className="text-xs text-slate-400">Sélectionnez une catégorie de pièces collectées pour accéder au tableau récapitulatif par employé</p>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-[#4A9EC9]/10 text-[#4A9EC9] rounded text-[9px] font-black uppercase tracking-wider">
+                  Structure par nature de données
+                </span>
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Types de dossiers administratifs</h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Sélectionnez une catégorie de pièces collectées pour accéder au tableau récapitulatif par employé</p>
             </div>
+
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4A9EC9]/20 border-0"
+              className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4A9EC9]/20 border-0 transition-all hover:scale-[1.01]"
             >
               <Plus className="w-4 h-4" /> Indexer une pièce / chemise
             </button>
           </div>
 
+          {/* Executive Stats Banner */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl p-4 border border-slate-150 shadow-2xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 text-[#4A9EC9] flex items-center justify-center shrink-0 border border-blue-100">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Types de pièces</span>
+                <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{COLLECTED_DATA_TYPES.length} catégories</div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-150 shadow-2xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Taux de conformité</span>
+                <div className="text-lg font-black text-emerald-600 font-mono mt-0.5">{globalComplianceRate}% conforme</div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-150 shadow-2xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pièces indexées</span>
+                <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{totalArchivedDocuments} numérisées</div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-150 shadow-2xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Salariés gérés</span>
+                <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{totalEmployeesCount} collaborateurs</div>
+              </div>
+            </div>
+          </div>
+
           {/* Search bar for folder types */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xs">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               {filteredDataTypes.length} catégorie(s) de pièces collectées
             </span>
@@ -1428,7 +1486,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
             </div>
           </div>
 
-          {/* Grid of Folder Types */}
+          {/* Grid of Folder Types Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {filteredDataTypes.map(dataType => {
               const IconComp = dataType.icon;
@@ -1445,8 +1503,8 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
               return (
                 <div 
                   key={dataType.id}
-                  onClick={() => { setSelectedFolderType(dataType); setSearchTerm(''); }}
-                  className="bg-white hover:bg-slate-50/80 border border-slate-150 hover:border-[#4A9EC9]/50 rounded-[1.5rem] p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                  onClick={() => { setSelectedFolderType(dataType); setSearchTerm(''); setStatusTableFilter('all'); }}
+                  className="bg-white hover:bg-slate-50/80 border border-slate-150 hover:border-[#4A9EC9]/50 rounded-[1.5rem] p-5 shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between">
@@ -1494,29 +1552,46 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
       {selectedFolderType && (() => {
         const IconComp = selectedFolderType.icon;
 
-        // Filter employees for this category table view
-        const tableEmployees = employees.filter(emp => {
-          if (!searchTerm) return true;
-          const term = searchTerm.toLowerCase();
-          return emp.name.toLowerCase().includes(term) || emp.matricule?.toLowerCase().includes(term) || emp.department?.toLowerCase().includes(term) || emp.position?.toLowerCase().includes(term);
-        });
-
+        // Stats calculation
         const completedCount = employees.filter(emp => {
           const fld = getFolderForEmployee(emp.id, selectedFolderType.folderType);
           return fld && fld.status === 'Complet';
         }).length;
 
+        const incompleteCount = employees.filter(emp => {
+          const fld = getFolderForEmployee(emp.id, selectedFolderType.folderType);
+          return fld && fld.status === 'Incomplet';
+        }).length;
+
+        const missingCount = employees.filter(emp => {
+          const fld = getFolderForEmployee(emp.id, selectedFolderType.folderType);
+          return !fld || fld.documentCount === 0;
+        }).length;
+
         const totalCount = employees.length;
         const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+        // Filter employees for this category table view with search & status filters
+        const tableEmployees = employees.filter(emp => {
+          const fld = getFolderForEmployee(emp.id, selectedFolderType.folderType);
+          
+          if (statusTableFilter === 'Complet' && (!fld || fld.status !== 'Complet')) return false;
+          if (statusTableFilter === 'Incomplet' && (!fld || fld.status !== 'Incomplet')) return false;
+          if (statusTableFilter === 'Missing' && (fld && fld.documentCount > 0)) return false;
+
+          if (!searchTerm) return true;
+          const term = searchTerm.toLowerCase();
+          return emp.name.toLowerCase().includes(term) || emp.matricule?.toLowerCase().includes(term) || emp.department?.toLowerCase().includes(term) || emp.position?.toLowerCase().includes(term);
+        });
 
         return (
           <div className="space-y-6">
             
             {/* Header & Back Navigation */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[1.75rem] border border-slate-150 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[1.75rem] border border-slate-150 shadow-2xs">
               <div className="flex items-start gap-4">
                 <button 
-                  onClick={() => { setSelectedFolderType(null); setSearchTerm(''); }}
+                  onClick={() => { setSelectedFolderType(null); setSearchTerm(''); setStatusTableFilter('all'); }}
                   className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 border-0 cursor-pointer transition-colors"
                   title="Retour aux types de dossiers"
                 >
@@ -1547,24 +1622,72 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
                     setForm({ employeeId: '', folderType: selectedFolderType.folderType, status: 'Complet' });
                     setIsModalOpen(true);
                   }}
-                  className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-sm border-0"
+                  className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-sm border-0 transition-all hover:scale-[1.01]"
                 >
                   <Plus className="w-4 h-4" /> Indexer
                 </button>
               </div>
             </div>
 
-            {/* Search & Filter Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                {tableEmployees.length} salarié(s) répertorié(s)
-              </span>
+            {/* Filter Tabs & Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xs">
+              
+              {/* Quick Status Filters */}
+              <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
+                <button
+                  onClick={() => setStatusTableFilter('all')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-0 cursor-pointer",
+                    statusTableFilter === 'all' 
+                      ? "bg-slate-900 text-white shadow-xs" 
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  Tous ({totalCount})
+                </button>
 
-              <div className="relative w-full md:w-80">
+                <button
+                  onClick={() => setStatusTableFilter('Complet')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-0 cursor-pointer flex items-center gap-1",
+                    statusTableFilter === 'Complet' 
+                      ? "bg-emerald-600 text-white shadow-xs" 
+                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  )}
+                >
+                  <span>✓ Complets ({completedCount})</span>
+                </button>
+
+                <button
+                  onClick={() => setStatusTableFilter('Incomplet')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-0 cursor-pointer flex items-center gap-1",
+                    statusTableFilter === 'Incomplet' 
+                      ? "bg-amber-600 text-white shadow-xs" 
+                      : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  )}
+                >
+                  <span>● Incomplets ({incompleteCount})</span>
+                </button>
+
+                <button
+                  onClick={() => setStatusTableFilter('Missing')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-0 cursor-pointer flex items-center gap-1",
+                    statusTableFilter === 'Missing' 
+                      ? "bg-slate-700 text-white shadow-xs" 
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  <span>○ Non fournis ({missingCount})</span>
+                </button>
+              </div>
+
+              <div className="relative w-full md:w-80 shrink-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Filtrer un salarié par nom, matricule ou poste..."
+                  placeholder="Filtrer par nom, matricule ou poste..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl pl-9 pr-4 text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all"
@@ -1573,7 +1696,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
             </div>
 
             {/* EMPLOYEES TABLE */}
-            <div className="bg-white rounded-[1.75rem] border border-slate-150 overflow-hidden shadow-xs">
+            <div className="bg-white rounded-[1.75rem] border border-slate-150 overflow-hidden shadow-2xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -1636,7 +1759,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenOrCreateFolder(emp, selectedFolderType)}
-                                className="px-3 py-1.5 bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-xs border-0 cursor-pointer"
+                                className="px-3.5 py-1.5 bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs border-0 cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" /> Voir les documents
                               </button>
@@ -1667,7 +1790,7 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
                     {tableEmployees.length === 0 && (
                       <tr>
                         <td colSpan={6} className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
-                          Aucun salarié ne correspond à votre recherche.
+                          Aucun salarié ne correspond à votre recherche ou filtre.
                         </td>
                       </tr>
                     )}
