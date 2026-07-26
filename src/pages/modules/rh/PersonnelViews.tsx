@@ -31,7 +31,9 @@ import {
   Printer,
   X,
   AlertCircle,
-  Layers
+  Layers,
+  ArrowLeft,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { saveActionLog } from '../../../lib/auditLogger';
@@ -1128,7 +1130,7 @@ export function ContractsView({ selectedDossierId }: ViewProps) {
 export function FoldersView({ selectedDossierId }: ViewProps) {
   const [folders, setFolders] = useState<HrFolder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [selectedFolderType, setSelectedFolderType] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
@@ -1383,224 +1385,299 @@ export function FoldersView({ selectedDossierId }: ViewProps) {
     setSelectedContractTemplate('');
   };
 
-  // Filter Categories by search term and selected tab
-  const displayedDataTypes = COLLECTED_DATA_TYPES.filter(dt => {
-    if (selectedCategoryFilter !== 'all' && dt.id !== selectedCategoryFilter) return false;
+  // Filter Categories by search term
+  const filteredDataTypes = COLLECTED_DATA_TYPES.filter(dt => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
-    
-    // Match if category matches search term
-    const categoryMatches = dt.title.toLowerCase().includes(term) || dt.description.toLowerCase().includes(term) || dt.folderType.toLowerCase().includes(term);
-    
-    // Or if any employee in this category matches search term
-    const employeeMatches = employees.some(e => e.name.toLowerCase().includes(term) || e.matricule?.toLowerCase().includes(term));
-
-    return categoryMatches || employeeMatches;
+    return dt.title.toLowerCase().includes(term) || dt.description.toLowerCase().includes(term) || dt.folderType.toLowerCase().includes(term);
   });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Dossiers administratifs & pièces collectées</h2>
-          <p className="text-xs text-slate-400">Organisation par nature de données RH collectées et suivi individuel par collaborateur</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4A9EC9]/20 border-0"
-        >
-          <Plus className="w-4 h-4" /> Indexer une pièce / chemise
-        </button>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
-          <button
-            onClick={() => setSelectedCategoryFilter('all')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border-0 cursor-pointer",
-              selectedCategoryFilter === 'all' 
-                ? "bg-slate-900 text-white shadow-sm" 
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            )}
-          >
-            Tous les types ({COLLECTED_DATA_TYPES.length})
-          </button>
-
-          {COLLECTED_DATA_TYPES.map(dt => (
-            <button
-              key={dt.id}
-              onClick={() => setSelectedCategoryFilter(dt.id)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border-0 cursor-pointer flex items-center gap-1.5",
-                selectedCategoryFilter === dt.id 
-                  ? "bg-[#4A9EC9] text-white shadow-sm" 
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              )}
+      
+      {/* LEVEL 1: GRID OF FOLDER TYPES (When no specific folder type is selected) */}
+      {!selectedFolderType && (
+        <>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Types de dossiers administratifs</h2>
+              <p className="text-xs text-slate-400">Sélectionnez une catégorie de pièces collectées pour accéder au tableau récapitulatif par employé</p>
+            </div>
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4A9EC9]/20 border-0"
             >
-              <span>{dt.badge}</span>
+              <Plus className="w-4 h-4" /> Indexer une pièce / chemise
             </button>
-          ))}
-        </div>
+          </div>
 
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Rechercher un salarié ou un type de document..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl pl-9 pr-4 text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all"
-          />
-        </div>
-      </div>
+          {/* Search bar for folder types */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {filteredDataTypes.length} catégorie(s) de pièces collectées
+            </span>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Rechercher une catégorie (CNI, RIB, Contrat...)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl pl-9 pr-4 text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all"
+              />
+            </div>
+          </div>
 
-      {/* CATEGORY GROUPED SECTIONS (Types de données collectées) */}
-      <div className="space-y-8">
-        {displayedDataTypes.map(dataType => {
-          const IconComp = dataType.icon;
-          
-          // Filter employees for this category
-          const filteredEmployees = employees.filter(emp => {
-            if (!searchTerm) return true;
-            const term = searchTerm.toLowerCase();
-            return emp.name.toLowerCase().includes(term) || emp.matricule?.toLowerCase().includes(term) || dataType.title.toLowerCase().includes(term);
-          });
+          {/* Grid of Folder Types */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {filteredDataTypes.map(dataType => {
+              const IconComp = dataType.icon;
 
-          // Calculate completion stats for this category
-          const completedCount = filteredEmployees.filter(emp => {
-            const fld = getFolderForEmployee(emp.id, dataType.folderType);
-            return fld && fld.status === 'Complet';
-          }).length;
+              // Calculate stats for this folder type
+              const completedCount = employees.filter(emp => {
+                const fld = getFolderForEmployee(emp.id, dataType.folderType);
+                return fld && fld.status === 'Complet';
+              }).length;
 
-          const totalEmployees = filteredEmployees.length;
-          const completionPercentage = totalEmployees > 0 ? Math.round((completedCount / totalEmployees) * 100) : 0;
+              const totalCount = employees.length;
+              const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-          return (
-            <div key={dataType.id} className="bg-white rounded-[1.75rem] border border-slate-150 p-6 shadow-xs space-y-5">
-              
-              {/* Category Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3.5">
-                  <div className={cn("w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border", dataType.color)}>
-                    <IconComp className="w-5 h-5" />
-                  </div>
+              return (
+                <div 
+                  key={dataType.id}
+                  onClick={() => { setSelectedFolderType(dataType); setSearchTerm(''); }}
+                  className="bg-white hover:bg-slate-50/80 border border-slate-150 hover:border-[#4A9EC9]/50 rounded-[1.5rem] p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                >
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{dataType.title}</h3>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase tracking-widest">
-                        {dataType.folderType}
+                    <div className="flex items-center justify-between">
+                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", dataType.color)}>
+                        <IconComp className="w-5 h-5" />
+                      </div>
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase tracking-wider">
+                        {dataType.badge}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                      {dataType.description}
-                    </p>
+
+                    <div className="mt-4">
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-tight group-hover:text-[#4A9EC9] transition-colors line-clamp-2">
+                        {dataType.title}
+                      </h3>
+                      <p className="text-[10px] text-slate-500 font-medium mt-1.5 line-clamp-3 leading-relaxed">
+                        {dataType.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-wider">Conformité</span>
+                      <span className="text-slate-800 font-mono">{completedCount} / {totalCount} complets ({percentage}%)</span>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${percentage}%` }}></div>
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-between text-[#4A9EC9] font-black text-[10px] uppercase tracking-wider group-hover:translate-x-1 transition-transform">
+                      <span>Voir le tableau des salariés</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                  <div className="text-right">
-                    <span className="text-xs font-black text-slate-800 font-mono">{completedCount} / {totalEmployees} complets</span>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{completionPercentage}% de conformité</p>
+      {/* LEVEL 2: TABLE VIEW FOR SELECTED FOLDER TYPE */}
+      {selectedFolderType && (() => {
+        const IconComp = selectedFolderType.icon;
+
+        // Filter employees for this category table view
+        const tableEmployees = employees.filter(emp => {
+          if (!searchTerm) return true;
+          const term = searchTerm.toLowerCase();
+          return emp.name.toLowerCase().includes(term) || emp.matricule?.toLowerCase().includes(term) || emp.department?.toLowerCase().includes(term) || emp.position?.toLowerCase().includes(term);
+        });
+
+        const completedCount = employees.filter(emp => {
+          const fld = getFolderForEmployee(emp.id, selectedFolderType.folderType);
+          return fld && fld.status === 'Complet';
+        }).length;
+
+        const totalCount = employees.length;
+        const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+        return (
+          <div className="space-y-6">
+            
+            {/* Header & Back Navigation */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[1.75rem] border border-slate-150 shadow-xs">
+              <div className="flex items-start gap-4">
+                <button 
+                  onClick={() => { setSelectedFolderType(null); setSearchTerm(''); }}
+                  className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 border-0 cursor-pointer transition-colors"
+                  title="Retour aux types de dossiers"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border", selectedFolderType.color)}>
+                      {selectedFolderType.badge}
+                    </span>
+                    <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">{selectedFolderType.title}</h2>
                   </div>
-                  <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${completionPercentage}%` }}></div>
-                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    {selectedFolderType.description}
+                  </p>
                 </div>
               </div>
 
-              {/* Employee Breakdown Cards Grid for this Category */}
-              {filteredEmployees.length === 0 ? (
-                <div className="py-8 text-center text-slate-300 text-xs font-bold uppercase tracking-widest bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  Aucun collaborateur trouvé pour cette catégorie.
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="text-right">
+                  <span className="text-xs font-black text-slate-800 font-mono">{completedCount} / {totalCount} complets</span>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{percentage}% de conformité</p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredEmployees.map(emp => {
-                    const folder = getFolderForEmployee(emp.id, dataType.folderType);
-                    const isComplete = folder && folder.status === 'Complet';
-                    const isIncomplete = folder && folder.status === 'Incomplet';
-                    const isMissing = !folder || folder.documentCount === 0;
 
-                    return (
-                      <div 
-                        key={emp.id} 
-                        className="bg-slate-50/70 hover:bg-white border border-slate-150 hover:border-[#4A9EC9]/40 rounded-2xl p-4 transition-all shadow-2xs hover:shadow-md flex flex-col justify-between group"
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2.5 overflow-hidden">
-                              <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center font-black text-xs shrink-0">
+                <button 
+                  onClick={() => {
+                    setForm({ employeeId: '', folderType: selectedFolderType.folderType, status: 'Complet' });
+                    setIsModalOpen(true);
+                  }}
+                  className="bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-sm border-0"
+                >
+                  <Plus className="w-4 h-4" /> Indexer
+                </button>
+              </div>
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {tableEmployees.length} salarié(s) répertorié(s)
+              </span>
+
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Filtrer un salarié par nom, matricule ou poste..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl pl-9 pr-4 text-xs font-bold outline-none focus:border-[#4A9EC9] transition-all"
+                />
+              </div>
+            </div>
+
+            {/* EMPLOYEES TABLE */}
+            <div className="bg-white rounded-[1.75rem] border border-slate-150 overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-150 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                      <th className="py-4 px-6">Salarié & Matricule</th>
+                      <th className="py-4 px-6">Poste & Département</th>
+                      <th className="py-4 px-6 text-center">Pièces indexées</th>
+                      <th className="py-4 px-6 text-center">Conformité</th>
+                      <th className="py-4 px-6">Dernière MAJ</th>
+                      <th className="py-4 px-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {tableEmployees.map(emp => {
+                      const folder = getFolderForEmployee(emp.id, selectedFolderType.folderType);
+                      const isComplete = folder && folder.status === 'Complet';
+                      const isIncomplete = folder && folder.status === 'Incomplet';
+
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 font-black flex items-center justify-center text-xs shrink-0 border border-slate-200">
                                 {emp.name.charAt(0)}
                               </div>
-                              <div className="overflow-hidden">
-                                <h4 className="text-xs font-black text-slate-900 uppercase truncate group-hover:text-[#4A9EC9] transition-colors" title={emp.name}>
-                                  {emp.name}
-                                </h4>
-                                <p className="text-[9px] text-slate-400 font-mono font-bold">
-                                  {emp.matricule || 'EMP-2026'} • {emp.positionDetails?.title || emp.position || 'Collaborateur'}
-                                </p>
+                              <div>
+                                <h4 className="font-black text-slate-900 uppercase tracking-tight">{emp.name}</h4>
+                                <p className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">{emp.matricule || 'EMP-2026'}</p>
                               </div>
                             </div>
+                          </td>
 
+                          <td className="py-4 px-6">
+                            <div className="font-bold text-slate-800">{emp.positionDetails?.title || emp.position || 'Collaborateur'}</div>
+                            <div className="text-[10px] text-slate-400 font-medium">{emp.positionDetails?.department || emp.department || 'Général'}</div>
+                          </td>
+
+                          <td className="py-4 px-6 text-center">
+                            <span className="font-mono font-black text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg text-xs">
+                              {folder ? `${folder.documentCount} document(s)` : '0 document'}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-6 text-center">
                             <span className={cn(
-                              "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0",
-                              isComplete ? "bg-emerald-100 text-emerald-800" :
-                              isIncomplete ? "bg-amber-100 text-amber-800" :
-                              "bg-slate-200 text-slate-600"
+                              "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5",
+                              isComplete ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                              isIncomplete ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                              "bg-slate-100 text-slate-600 border border-slate-200"
                             )}>
                               {isComplete ? "✓ Complet" : isIncomplete ? "● Incomplet" : "○ Non fourni"}
                             </span>
-                          </div>
+                          </td>
 
-                          <div className="mt-3.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                            <span className="font-bold font-mono">
-                              {folder ? `${folder.documentCount} pièce(s) enregistrée(s)` : '0 pièce numérisée'}
-                            </span>
-                            {folder && (
-                              <span className="text-[9px] text-slate-400">Maj : {folder.lastUpdated}</span>
-                            )}
-                          </div>
-                        </div>
+                          <td className="py-4 px-6 text-slate-500 font-mono text-[11px]">
+                            {folder?.lastUpdated || '-'}
+                          </td>
 
-                        {/* Action buttons */}
-                        <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between gap-2">
-                          <button
-                            onClick={() => handleOpenOrCreateFolder(emp, dataType)}
-                            className="flex-1 py-1.5 px-2 bg-white hover:bg-[#4A9EC9] text-[#4A9EC9] hover:text-white border border-[#4A9EC9]/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all shadow-2xs border-0 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" /> Consulter / Gérer
-                          </button>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenOrCreateFolder(emp, selectedFolderType)}
+                                className="px-3 py-1.5 bg-[#4A9EC9] hover:bg-[#3D8CB7] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-xs border-0 cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Voir les documents
+                              </button>
 
-                          <button
-                            onClick={() => setViewA4Employee(emp)}
-                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors border-0 cursor-pointer"
-                            title="Fiche individuelle A4"
-                          >
-                            A4
-                          </button>
+                              <button
+                                onClick={() => setViewA4Employee(emp)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors border-0 cursor-pointer"
+                                title="Affiche la fiche A4 de l'employé"
+                              >
+                                Fiche A4
+                              </button>
 
-                          {folder && (
-                            <button
-                              onClick={() => handleDelete(folder.id, emp.name, dataType.folderType)}
-                              className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 cursor-pointer"
-                              title="Supprimer la chemise"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                              {folder && (
+                                <button
+                                  onClick={() => handleDelete(folder.id, emp.name, selectedFolderType.folderType)}
+                                  className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 cursor-pointer"
+                                  title="Supprimer la chemise"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
+                    {tableEmployees.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                          Aucun salarié ne correspond à votre recherche.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })()}
 
       {/* CREATE / INDEX FOLDER MODAL */}
       {isModalOpen && (
