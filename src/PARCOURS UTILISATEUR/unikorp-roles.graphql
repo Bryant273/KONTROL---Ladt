@@ -1,0 +1,97 @@
+"""
+Modèle de rôles et de parcours utilisateur UNIKORP.
+
+Deux catégories :
+- Admins (admin entreprise, admin gestionnaire) : dashboard admin -> accès à l'ERP complet
+- Utilisateurs (gestionnaire de module, stagiaire) : redirection directe vers le dashboard de leur module
+
+Les enregistrements créés par un stagiaire restent EN_ATTENTE jusqu'à validation
+par un autre rôle (jamais par le stagiaire lui-même).
+"""
+
+scalar JSON
+
+enum UserRole {
+  ADMIN_ENTREPRISE
+  ADMIN_GESTIONNAIRE
+  GESTIONNAIRE_MODULE
+  STAGIAIRE
+}
+
+enum ValidationStatus {
+  EN_ATTENTE
+  VALIDE
+  REJETE
+}
+
+type Module {
+  id: ID!
+  nom: String!
+  slug: String!
+}
+
+type User {
+  id: ID!
+  identifiant: String!
+  role: UserRole!
+  # null pour les admins, obligatoire pour un utilisateur rattaché à un module
+  module: Module
+  dashboard: Dashboard!
+}
+
+"""
+Le dashboard servi après authentification dépend du rôle :
+- AdminDashboard pour ADMIN_ENTREPRISE / ADMIN_GESTIONNAIRE
+- ModuleDashboard pour GESTIONNAIRE_MODULE / STAGIAIRE
+"""
+union Dashboard = AdminDashboard | ModuleDashboard
+
+type AdminDashboard {
+  kpis: [String!]!
+  # true si le bouton "Accéder à l'ERP complet" est disponible
+  peutAccederERPComplet: Boolean!
+}
+
+type ModuleDashboard {
+  module: Module!
+}
+
+"""
+Un enregistrement créé dans un module.
+Statut EN_ATTENTE par défaut lorsqu'il est créé par un STAGIAIRE,
+VALIDE immédiatement pour les autres rôles.
+"""
+type Record {
+  id: ID!
+  module: Module!
+  creePar: User!
+  valideParUser: User
+  data: JSON!
+  status: ValidationStatus!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+type Query {
+  me: User!
+  dashboard: Dashboard!
+  records(moduleId: ID!, status: ValidationStatus): [Record!]!
+}
+
+type Mutation {
+  login(identifiant: String!, motDePasse: String!): AuthPayload!
+
+  # Réservé aux rôles ADMIN_ENTREPRISE / ADMIN_GESTIONNAIRE
+  accederERPComplet: AdminDashboard!
+
+  # Crée un enregistrement dans le module de l'utilisateur connecté.
+  # status = EN_ATTENTE si createdBy.role == STAGIAIRE, sinon VALIDE.
+  createRecord(moduleId: ID!, data: JSON!): Record!
+
+  # Réservé aux rôles autres que STAGIAIRE
+  validateRecord(recordId: ID!): Record!
+  rejectRecord(recordId: ID!, motif: String): Record!
+}
